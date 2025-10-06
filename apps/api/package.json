@@ -1,0 +1,72 @@
+{
+  "name": "@loopyway/api",
+  "private": true,
+  "version": "0.0.3",
+  "type": "module",
+  "main": "dist/server.mjs",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsup --config tsup.config.ts",
+    "build:bundle": "tsup --config tsup.config.ts",
+    "start": "node dist/server.mjs",
+    "migrate": "tsx src/migrate.ts",
+    "check:bundle": "node -e \"import('file://'+process.cwd()+'/dist/server.mjs').then(()=>console.log('OK')).catch(e=>{console.error(e);process.exit(1)})\""
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.585.0",
+    "@aws-sdk/lib-storage": "^3.585.0",
+    "@babel/parser": "7.28.4",
+    "@babel/traverse": "7.28.4",
+    "@babel/types": "7.28.4",
+    "@fastify/cookie": "^11.0.2",
+    "@fastify/cors": "^11.1.0",
+    "@fastify/csrf-protection": "^7.1.0",
+    "@fastify/helmet": "^13.0.1",
+    "@fastify/static": "^8.2.0",
+    "@google-cloud/storage": "^7.7.0",
+    "@loopyway/entitlements": "workspace:*",
+    "@swc/helpers": "0.5.17",
+    "ajv": "8.17.1",
+    "ajv-formats": "3.0.1",
+    "archiver": "^7.0.1",
+    "autoprefixer": "^10.4.19",
+    "bcryptjs": "^2.4.3",
+    "bullmq": "^5.8.0",
+    "dotenv": "^16.6.1",
+    "es-module-lexer": "1.7.0",
+    "esbuild": "^0.21.5",
+    "fastify": "^5.5.0",
+    "fastify-plugin": "^5.0.1",
+    "fastify-raw-body": "^5.0.0",
+    "firebase-admin": "13.5.0",
+    "multer": "^1.4.5-lts.1",
+    "nodemailer": "^6.10.1",
+    "pdfkit": "0.17.2",
+    "postcss": "^8.4.33",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "stripe": "^14.25.0",
+    "tailwindcss": "^3.4.0",
+    "tar": "^7.4.3",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@fastify/multipart": "^9.0.3",
+    "@types/bcryptjs": "^3.0.0",
+    "@types/node": "24.2.1",
+    "@types/nodemailer": "^7.0.0",
+    "dotenv-cli": "^10.0.0",
+    "extract-zip": "^2.0.1",
+    "globby": "^14.1.0",
+    "tsup": "^8.3.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.2"
+  },
+  "optionalDependencies": {
+    "better-sqlite3": "^9.4.0",
+    "puppeteer": "^24.16.0"
+  }
+}

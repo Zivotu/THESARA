@@ -1,0 +1,26 @@
+﻿{
+  "extends": "./tsconfig.json",
+  "include": [
+    "next-env.d.ts",
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "components/**/*.ts",
+    "components/**/*.tsx",
+    "lib/**/*.ts",
+    "lib/**/*.tsx",
+    "hooks/**/*.ts",
+    "hooks/**/*.tsx",
+    "pages/**/*.ts",
+    "pages/**/*.tsx",
+    "types/**/*.ts"
+  ],
+  "exclude": [
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "app/__tests__/**",
+    "lib/**/*.test.ts",
+    "build/**",
+    "_app_api_disabled/**",
+    "node_modules/**"
+  ]
+}

@@ -1,0 +1,121 @@
+[
+  {
+    "id": "opcenito",
+    "title": "Općenito",
+    "items": [
+      {
+        "q": "Što je {site}?",
+        "a": "{site} je marketplace za mini web‑aplikacije i igre. Možeš ih pokretati u pregledniku, lajkati i dijeliti, a kao kreator možeš ih objaviti u par minuta."
+      },
+      {
+        "q": "Moram li imati račun?",
+        "a": "Za pregled nije potrebno, ali za igranje/pokretanje, lajkove i objavu aplikacija potrebno je prijaviti se ili registrirati."
+      },
+      {
+        "q": "Je li {site} besplatan?",
+        "a": "Osnovno korištenje je besplatno. Napredne značajke i veće kvote dostupne su u Pro planu."
+      }
+    ]
+  },
+  {
+    "id": "racun-privatnost",
+    "title": "Račun i privatnost",
+    "items": [
+      {
+        "q": "Kako se prijavljujem?",
+        "a": "Prijava je preko Google računa ili email + lozinka. Nakon prijave automatski kreiramo korisnički profil za sinkronizaciju."
+      },
+      {
+        "q": "Kako brišem račun?",
+        "a": "Javi nam se preko podrške ili nas kontaktiraj putem profila – možemo trajno obrisati tvoj račun i pripadajuće podatke."
+      },
+      {
+        "q": "Što spremate o meni?",
+        "a": "Spremamo osnovne podatke potrebne za prijavu (email, ime, avatar) i agregirane metrike (lajkovi, pregledi). Ne prodajemo podatke trećim stranama."
+      }
+    ]
+  },
+  {
+    "id": "objava-kreatori",
+    "title": "Objava i kreatori",
+    "items": [
+      {
+        "q": "Kako objavim aplikaciju?",
+        "a": "Na naslovnici klikni ‘Publish App’, učitaj ZIP bundle ili repo i slijedi korake. Dobit ćeš pregled, mrežnu politiku i mogućnost dodavanja opisa, tagova i cijene."
+      },
+      {
+        "q": "Zašto je moja aplikacija na ‘pending review’?",
+        "a": "Aplikacije prolaze sigurnosnu provjeru (automatizirano + po potrebi ručno). Ako nešto treba popraviti, dobit ćeš obavijest i razloge."
+      },
+      {
+        "q": "Mogu li naplatiti pristup aplikaciji?",
+        "a": "Da. U detaljima aplikacije postavi cijenu. Korisnici s plaćenim pristupom ili PIN‑om moći će pokretati aplikaciju."
+      }
+    ]
+  },
+  {
+    "id": "cijene-pretplate",
+    "title": "Cijene i pretplate",
+    "items": [
+      {
+        "q": "Koje planove nudite?",
+        "a": "Free plan (do 2 aplikacije) i Gold plan s proširenim kvotama i dodatnim mogućnostima (npr. veći upload, prioritetni review)."
+      },
+      {
+        "q": "Kako funkcioniraju plaćene aplikacije?",
+        "a": "Kreator postavlja cijenu. Korisnik nakon plaćanja dobiva pristup (PIN ili entitlement) i može igrati/pokrenuti aplikaciju bez ograničenja."
+      },
+      {
+        "q": "Povrat novca?",
+        "a": "Ako nešto ne radi kako treba, kontaktiraj podršku u roku 14 dana i pomoći ćemo – uključujući povrat u opravdanim slučajevima."
+      }
+    ]
+  },
+  {
+    "id": "sigurnost",
+    "title": "Sigurnost i sandbox",
+    "items": [
+      {
+        "q": "Što je ‘sigurnosni kavez’?",
+        "a": "Aplikacije se pokreću u sandboxiranom iframeu uz strogi CSP. Time ograničavamo pristup mreži, kolačićima i API‑jima preglednika."
+      },
+      {
+        "q": "Što je mrežna politika (No Net / Media Only / Open Net)?",
+        "a": "No Net: bez mrežnih poziva. Media Only: samo slike/CDN. Open Net: širi pristup (uz navođenje domena). Politika je vidljiva na detaljima aplikacije."
+      },
+      {
+        "q": "Kako prijaviti problem ili zloupotrebu?",
+        "a": "Na detaljima aplikacije koristite ‘Report’ (ako je vidljivo) ili nam pošaljite URL i opis putem podrške."
+      }
+    ]
+  },
+  {
+    "id": "kompatibilnost",
+    "title": "Kompatibilnost i performanse",
+    "items": [
+      {
+        "q": "Koji preglednici su podržani?",
+        "a": "Najbolje rade najnovije verzije Chrome, Edge, Safari i Firefox. Na mobilnim uređajima preporučujemo Chrome (Android) i Safari (iOS)."
+      },
+      {
+        "q": "Aplikacija se sporo učitava – što učiniti?",
+        "a": "Provjeri mrežnu vezu i pokušaj ponovo. Ako i dalje traje, javi kreatoru preko komentara ili podršci uz URL aplikacije."
+      }
+    ]
+  },
+  {
+    "id": "pomoc",
+    "title": "Pomoć i podrška",
+    "items": [
+      {
+        "q": "Kako kontaktirati podršku?",
+        "a": "Piši nam putem stranice podrške ili preko profila. Uključi URL aplikacije i kratki opis problema."
+      },
+      {
+        "q": "Gdje su novosti i planovi?",
+        "a": "Objavljujemo novosti u aplikaciji i na našim kanalima – potraži ‘Changelog’ u meniju ili nas prati na društvenim mrežama."
+      }
+    ]
+  }
+]
+

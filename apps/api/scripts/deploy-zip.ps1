@@ -1,0 +1,1 @@
+Compress-Archive -Path dist,package.json,README_DEPLOY.txt -DestinationPath ../../thesara-api.zip -Force

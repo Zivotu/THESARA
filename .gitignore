@@ -1,0 +1,149 @@
+# =========================
+# Core: Node / pnpm / Logs
+# =========================
+node_modules/
+**/node_modules/
+.pnpm-store/
+**/.pnpm-store/
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+logs/
+*.pid
+*.seed
+*.pid.lock
+.eslintcache
+*.tsbuildinfo
+
+# =========================
+# Framework / Build outputs
+# =========================
+# Next.js
+.next/
+**/.next/
+out/
+
+# General builds
+dist/
+**/dist/
+build/
+**/build/
+.turbo/
+**/.turbo/
+.cache/
+**/.cache/
+coverage/
+
+# Vite / Parcel (ako se pojavi negdje)
+.vite/
+.parcel-cache/
+
+# =========================
+# App-specifični runtime/artifakti
+# =========================
+# Sve što API generira u runtime-u: BUNDLES, PREVIEWS, PUBLISHED, UPLOADS...
+apps/api/storage/**
+!apps/api/storage/.gitkeep
+!apps/api/storage/README.md
+
+# Privremeno / review / temp paketi
+apps/api/tmp/
+apps/api/tmp/*.tar.gz
+apps/api/review/builds/
+
+# Ako igdje postoji globalni storage izvan apps/api (sigurnosno)
+storage/**
+!storage/.gitkeep
+!storage/README.md
+
+# =========================
+# Ključevi i osjetljive mape (ako ih koristiš)
+# =========================
+/keys/
+apps/api/keys/
+apps/web/keys/
+*.pem
+*.key
+
+# =========================
+# Env datoteke
+# (drži SAMO primjerke u repou)
+# =========================
+.env
+.env.*
+apps/web/.env.local
+
+# Dozvoli samo *primjere* (.example / .sample / .template)
+!*.example
+!*.sample
+!*.template
+# !.env.development   # (omogući ako baš želiš pratiti)
+
+# =========================
+# Arhive i velike binarke (ne u repo)
+# =========================
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+*.rar
+*.bak
+*.orig
+
+# =========================
+# Test alati (po potrebi)
+# =========================
+# Playwright
+playwright-report/
+blob-report/
+test-results/
+
+# Cypress
+cypress/videos/
+cypress/screenshots/
+
+# Jest
+jest-stare/
+coverage/
+
+# =========================
+# Deploy / alatne mape
+# =========================
+.vercel/
+.firebase/
+
+# =========================
+# OS / Editor šum
+# =========================
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Icon?
+desktop.ini
+
+# VS Code / JetBrains / VS
+.vscode/
+.idea/
+.history/
+.vs/
+# ==== THESARA: dodatna isključenja runtime/build artefakata ====
+# Storage/runtime bilo gdje u monorepu
+**/storage/**
+!**/storage/.gitkeep
+!**/storage/README.md
+
+# Buildovi unutar storagea i inače
+**/builds/**
+**/bundle/**
+**/cdn-cache/**
+
+# Dijagnostika i privremene mape
+**/.diag/
+**/tmp/
+
+# (sigurnosno) specifično za slučaj duplog patha
+apps/api/apps/api/storage/**
+/__dryrun_add.txt
