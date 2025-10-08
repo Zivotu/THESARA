@@ -65,8 +65,14 @@ export async function createServer() {
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
-  const prodDefaultOrigins = ['https://thesara.space', 'https://www.thesara.space'];
-  const devFallbackOrigins = ALLOWED_ORIGINS;
+  const prodDefaultOrigins = [
+    'https://thesara.space',
+    'https://www.thesara.space',
+  ];
+  const devFallbackOrigins = [
+    ...ALLOWED_ORIGINS,
+    'http://127.0.0.1:3000',
+  ];
   const resolvedAllowedOrigins = allowedFromEnv.length
     ? allowedFromEnv
     : isProd
@@ -90,6 +96,7 @@ export async function createServer() {
     'https://thesara.space',
     'https://www.thesara.space',
     'http://localhost:3000',
+    'http://127.0.0.1:3000',
   ]);
 
   app.addHook('onSend', (req, reply, _payload, done) => {
