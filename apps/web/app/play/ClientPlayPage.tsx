@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
 import { apiFetch, ApiError } from '@/lib/api';
 import { API_URL } from '@/lib/config';
 import { joinUrl } from '@/lib/url';
+import { useSafeSearchParams } from '@/hooks/useSafeSearchParams';
 
 type BuildStatusResponse = {
   state?: string;
@@ -19,12 +19,12 @@ type ListingResponse = {
 const IFRAME_SANDBOX = 'allow-scripts allow-same-origin allow-forms';
 
 export default function ClientPlayPage({ appId }: { appId: string }) {
-  const searchParams = useSearchParams();
-  const run = useMemo(() => {
-    if (!searchParams) return false;
-    return searchParams.get('run') === '1' || searchParams.get('autoplay') === '1';
-  }, [searchParams]);
-  const token = useMemo(() => searchParams?.get('token') ?? undefined, [searchParams]);
+  const searchParams = useSafeSearchParams();
+  const run = useMemo(
+    () => searchParams.get('run') === '1' || searchParams.get('autoplay') === '1',
+    [searchParams],
+  );
+  const token = useMemo(() => searchParams.get('token') ?? undefined, [searchParams]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

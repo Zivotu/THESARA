@@ -2,7 +2,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useState, useCallback } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSafeSearchParams } from "@/hooks/useSafeSearchParams";
 import Link from "next/link";
 import { triggerConfetti } from "@/components/Confetti";
 import { API_URL } from "@/lib/config";
@@ -21,7 +21,7 @@ type BillingPackage = {
 };
 
 export default function BillingSuccessClient() {
-  const search = useSearchParams();
+  const search = useSafeSearchParams();
   const [sessionId] = useState<string | null>(() => {
     const id = search.get("session_id");
     if (id) return id;

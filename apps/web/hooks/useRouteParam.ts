@@ -1,17 +1,18 @@
 ﻿'use client';
 
 import { useMemo } from 'react';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { usePathname } from 'next/navigation';
+import { useSafeSearchParams } from './useSafeSearchParams';
 
 type FallbackResolver = (segments: string[]) => string | null | undefined;
 
 export function useRouteSegments(): string[] {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? '';
   return useMemo(() => pathname.split('/').filter(Boolean), [pathname]);
 }
 
 export function useRouteParam(name: string, fallback?: FallbackResolver): string {
-  const searchParams = useSearchParams();
+  const searchParams = useSafeSearchParams();
   const segments = useRouteSegments();
 
   return useMemo(() => {

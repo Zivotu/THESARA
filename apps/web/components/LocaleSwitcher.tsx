@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useTransition, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useI18n } from '@/lib/i18n-provider';
 
 const locales = [
@@ -11,7 +11,6 @@ const locales = [
 
 export default function LocaleSwitcher() {
   const router = useRouter();
-  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const { locale: initialLocale, messages } = useI18n();

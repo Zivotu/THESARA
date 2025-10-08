@@ -1,12 +1,12 @@
 "use client";
 
 import { Suspense, useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { useRouteParam } from '@/hooks/useRouteParam';
 import { API_URL } from '@/lib/config';
 import { useAuth } from '@/lib/auth';
 import { apiGet } from '@/lib/api';
 import { startStripeOnboarding, openStripeDashboard } from '@/hooks/useConnectStatus';
+import { useSafeSearchParams } from '@/hooks/useSafeSearchParams';
 
 type Metrics = {
   allAccess: {
@@ -50,7 +50,7 @@ function CreatorFinancesClient() {
     return undefined;
   });
   const safeHandle = handle ? encodeURIComponent(handle) : '';
-  const searchParams = useSearchParams();
+  const searchParams = useSafeSearchParams();
   const { user } = useAuth();
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [error, setError] = useState<string | null>(null);

@@ -7,12 +7,13 @@ import { API_URL } from '@/lib/config';
 import { useAuth, getDisplayName } from '@/lib/auth';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { translateReason } from '@/lib/reviewReasons';
 import { useI18n } from '@/lib/i18n-provider';
 import { getPlayUrl } from '@/lib/play';
 import { useRelativeTime } from '@/hooks/useRelativeTime';
 import { resolvePreviewUrl } from '@/lib/preview';
+import { useSafeSearchParams } from '@/hooks/useSafeSearchParams';
 import {
   useConnectStatus,
   startStripeOnboarding,
@@ -116,7 +117,7 @@ function Toast({
 export default function MyProjectsPage() {
   const { user } = useAuth();
   const name = getDisplayName(user);
-  const searchParams = useSearchParams();
+  const searchParams = useSafeSearchParams();
   const router = useRouter();
   const { locale } = useI18n();
   const lastLocaleRef = useRef<string | null>(null);

@@ -17,7 +17,7 @@ export default function Header() {
   const { messages } = useI18n();
   const tNav = (k: string) => messages[`Nav.${k}`] || k;
   const router = useRouter();
-  const pathname = usePathname();
+  const pathname = usePathname() ?? '';
   const { user } = useAuth();
   const name = getDisplayName(user);
   const [hasApps, setHasApps] = useState(false);

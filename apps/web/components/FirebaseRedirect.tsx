@@ -6,7 +6,7 @@ import { getMissingFirebaseEnv } from '@/lib/env';
 
 export default function FirebaseRedirect({ children }: { children?: React.ReactNode }) {
   const router = useRouter();
-  const pathname = usePathname();
+  const pathname = usePathname() ?? '';
 
   useEffect(() => {
     if (process.env.NODE_ENV !== 'production') return;

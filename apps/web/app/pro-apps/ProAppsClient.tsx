@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { API_URL, SITE_NAME } from '@/lib/config';
 import { useAuth, getDisplayName } from '@/lib/auth';
 import { signOut } from 'firebase/auth';
@@ -22,7 +22,6 @@ function cn(...classes: Array<string | false | undefined>) {
 export default function ProAppsPage() {
   const [handles, setHandles] = useState<Record<string, string>>({});
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { messages, locale } = useI18n();
   const tHome = (k: string, params?: Record<string, any>) => {
     let s = messages[`Home.${k}`] || '';

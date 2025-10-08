@@ -2,11 +2,12 @@
 import { auth } from '@/lib/firebase';
 
 async function resolveCurrentUser(): Promise<User | null> {
-  if (!auth) return null;
-  if (auth.currentUser) return auth.currentUser;
+  const authInstance = auth;
+  if (!authInstance) return null;
+  if (authInstance.currentUser) return authInstance.currentUser;
   return await new Promise<User | null>((resolve) => {
     const unsubscribe = onAuthStateChanged(
-      auth,
+      authInstance,
       (u) => {
         unsubscribe();
         resolve(u ?? null);

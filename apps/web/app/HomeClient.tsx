@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { API_URL, SITE_NAME } from '@/lib/config';
 import { useAuth, getDisplayName } from '@/lib/auth';
 import { signOut } from 'firebase/auth';
@@ -17,6 +17,7 @@ import { useEntitlements } from '@/hooks/useEntitlements';
 import { useI18n } from '@/lib/i18n-provider';
 import type { Listing as ApiListing } from '@/lib/types';
 import { resolvePreviewUrl } from '@/lib/preview';
+import { useSafeSearchParams } from '@/hooks/useSafeSearchParams';
 export {};
 type HomeClientProps = {
   initialItems?: ApiListing[];
@@ -160,7 +161,7 @@ export default function HomeClient({ initialItems = [] }: HomeClientProps) {
   const initialItemsRef = useRef(initialItems?.map(toCardListing) ?? []);
   const [subscribed, setSubscribed] = useState<Set<string>>(new Set());
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const searchParams = useSafeSearchParams();
   const { messages, locale } = useI18n();
   const tHome = (k: string, params?: Record<string, any>) => {
     let s = messages[`Home.${k}`] || '';

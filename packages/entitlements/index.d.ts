@@ -3,4 +3,5 @@ export type EntitlementType =
   | 'creator-all-access'
   | 'free-ads'
   | 'isGold'
-  | 'noAds';
+  | 'noAds'
+  | 'app-trial';

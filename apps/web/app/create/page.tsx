@@ -730,6 +730,7 @@ export default function CreatePage() {
         const json = await apiAuthedPost<{
           buildId?: string;
           listingId?: string | number;
+          slug?: string;
           error?: { errorCode?: string; message?: string };
         }>('/publish', payload);
         if (json.slug) {

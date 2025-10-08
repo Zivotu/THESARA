@@ -1,11 +1,12 @@
 "use client";
 
 import { Suspense, useState, useEffect, useRef } from 'react';
-import { useSearchParams, useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { API_URL } from '@/lib/config';
 import type { AccessMode } from '@/lib/types';
 import { useAuth } from '@/lib/auth';
+import { useSafeSearchParams } from '@/hooks/useSafeSearchParams';
 
 function Toast({
   message,
@@ -119,7 +120,7 @@ export default function PaywallPage() {
 
 function PaywallClient() {
   const params = useParams<{ slug: string }>();
-  const slug = params.slug;
+  const slug = params?.slug ?? '';
   const safeSlug = slug ? encodeURIComponent(slug) : '';
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -130,7 +131,7 @@ function PaywallClient() {
   const [creatorUid, setCreatorUid] = useState<string | null>(null);
   const [allAccessAvailable, setAllAccessAvailable] = useState(false);
   const [appNumericId, setAppNumericId] = useState<number | null>(null);
-  const search = useSearchParams();
+  const search = useSafeSearchParams();
   const router = useRouter();
   const { user } = useAuth();
   const idempotencyKeys = useRef<Record<string, string>>({});

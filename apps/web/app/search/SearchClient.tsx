@@ -1,8 +1,8 @@
 'use client';
 import { useEffect, useState, Suspense as _Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { API_URL } from '@/lib/config';
 import { handleFetchError } from '@/lib/handleFetchError';
+import { useSafeSearchParams } from '@/hooks/useSafeSearchParams';
 
 type Oglas = {
   id: number;
@@ -15,7 +15,7 @@ type Oglas = {
 };
 
 export default function SearchClient() {
-  const params = useSearchParams();
+  const params = useSafeSearchParams();
   const [items, setItems] = useState<Oglas[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
