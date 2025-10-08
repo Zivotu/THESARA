@@ -4,7 +4,7 @@
   "version": "0.0.1",
   "scripts": {
     "dev": "next dev",
-    "dev:remote": "cross-env PORT=3000 NEXT_PUBLIC_API_URL=https://api.thesara.space INTERNAL_API_URL=https://api.thesara.space next dev",
+    "dev:remote": "cross-env PORT=3000 NEXT_PUBLIC_API_URL=https://api.thesara.space/api INTERNAL_API_URL=https://api.thesara.space/api next dev",
     "dev:local": "cross-env PORT=3000 NEXT_PUBLIC_LOCAL_API_URL=http://127.0.0.1:8788 INTERNAL_API_URL=http://127.0.0.1:8788 next dev",
     "build": "next build",
     "export": "cross-env NEXT_OUTPUT=export next build",
