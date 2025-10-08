@@ -1,31 +1,30 @@
 "use client";
+import { useEffect, useTransition, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { useTransition, useState } from 'react';
 import { useI18n } from '@/lib/i18n-provider';
 
 const locales = [
   { code: 'hr', label: 'Hrvatski', icon: '/flags/hr.svg' },
   { code: 'en', label: 'English', icon: '/flags/gb.svg' },
-  { code: 'de', label: 'Deutsch', icon: '/flags/de.svg' }
+  { code: 'de', label: 'Deutsch', icon: '/flags/de.svg' },
 ] as const;
-
-// With localePrefix: 'never', locale is determined by cookie; read html lang for UI
-function getCurrentLocale(): string {
-  if (typeof document !== 'undefined') {
-    const lang = document.documentElement.lang || 'hr';
-    return ['hr', 'en', 'de'].includes(lang) ? lang : 'hr';
-  }
-  return 'hr';
-}
 
 export default function LocaleSwitcher() {
   const router = useRouter();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
-  const { messages } = useI18n();
+  const { locale: initialLocale, messages } = useI18n();
+  const [locale, setLocale] = useState(
+    locales.some((l) => l.code === initialLocale) ? initialLocale : locales[0].code,
+  );
 
-  const locale = getCurrentLocale();
+  useEffect(() => {
+    if (locales.some((l) => l.code === initialLocale)) {
+      setLocale(initialLocale);
+    }
+  }, [initialLocale]);
+
   const current = locales.find((l) => l.code === locale) || locales[0];
 
   function switchTo(code: string) {
@@ -38,6 +37,7 @@ export default function LocaleSwitcher() {
       try {
         document.documentElement.lang = code;
       } catch {}
+      setLocale(code);
       // Trigger a server render so I18nRootProvider picks the new cookie
       router.refresh();
       setOpen(false);

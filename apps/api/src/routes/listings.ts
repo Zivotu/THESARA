@@ -1,7 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import path from 'node:path';
 import fs from 'node:fs/promises';
-import puppeteer from 'puppeteer';
 import { readApps, writeApps, type AppRecord, setAppLike } from '../db.js';
 import { notifyAdmins } from '../notifier.js';
 import { z } from 'zod';
@@ -10,6 +9,7 @@ import { getConnectStatus } from '../billing/service.js';
 import { getBuildDir } from '../paths.js';
 import { getBucket } from '../storage.js';
 import { ensureListingTranslations } from '../lib/translate.js';
+import { ensureListingPreview, saveListingPreviewFile } from '../lib/preview.js';
 
 const SUPPORTED_LOCALES = ['en', 'hr', 'de'] as const;
 type SupportedLocale = typeof SUPPORTED_LOCALES[number];
@@ -28,6 +28,20 @@ export default async function listingsRoutes(app: FastifyInstance) {
     const ownerId = owner || ownerUid;
 
     let items: AppRecord[] = await readApps();
+    let mutated = false;
+    items = items.map((it) => {
+      const { next, changed } = ensureListingPreview(it);
+      if (changed) mutated = true;
+      return next;
+    });
+    if (mutated) {
+      try {
+        await writeApps(items);
+      } catch (err) {
+        req.log?.warn?.({ err }, 'listings_preview_update_failed');
+      }
+    }
+
     if (ownerId) {
       items = items.filter(
         (a) => a.author?.uid === ownerId || (a as any).ownerUid === ownerId,
@@ -66,11 +80,21 @@ export default async function listingsRoutes(app: FastifyInstance) {
   app.get('/listing/:slug', async (req: FastifyRequest, reply: FastifyReply) => {
     const slug = String((req.params as any).slug);
     const apps = await readApps();
-    const item = apps.find(
+    const idx = apps.findIndex(
       (a) => a.slug === slug || String(a.id) === slug,
     );
-    if (!item) {
+    if (idx < 0) {
       return reply.code(404).send({ ok: false, error: 'not_found' });
+    }
+    const item = apps[idx];
+    const { next: normalizedItem, changed: previewChanged } = ensureListingPreview(item);
+    if (previewChanged) {
+      apps[idx] = normalizedItem;
+      try {
+        await writeApps(apps);
+      } catch (err) {
+        req.log?.warn?.({ err, slug }, 'listing_preview_update_failed');
+      }
     }
 
     const uid = (req.authUser?.uid || (req.query as any)?.uid) as string | undefined;
@@ -86,14 +110,14 @@ export default async function listingsRoutes(app: FastifyInstance) {
         : reply.code(404).send({ ok: false, error: 'not_found' });
     }
 
-    const result: any = { ...item };
+    const result: any = { ...normalizedItem };
     // Localize title/description if requested
     const lang = pickLang(req);
     if (lang) {
       try {
-        const tr = item.translations?.[lang];
+        const tr = normalizedItem.translations?.[lang];
         if (!tr?.title) {
-          await ensureListingTranslations(item, [lang]);
+          await ensureListingTranslations(normalizedItem, [lang]);
         }
         if (tr?.title) {
           result.title = tr.title;
@@ -107,7 +131,7 @@ export default async function listingsRoutes(app: FastifyInstance) {
     return { ok: true, item: result };
   });
 
-  // Regenerate preview screenshot for a listing (owner or admin only)
+  // Upload or replace preview image (owner or admin only)
   app.post('/listing/:slug/preview', async (req: FastifyRequest, reply: FastifyReply) => {
     const slug = String((req.params as any).slug);
     const apps = await readApps();
@@ -117,7 +141,6 @@ export default async function listingsRoutes(app: FastifyInstance) {
     }
     const item = apps[idx];
 
-    // Auth: only owner or admin can refresh
     const uid = (req.authUser?.uid || (req.query as any)?.uid) as string | undefined;
     const ownerUid = item.author?.uid || (item as any).ownerUid;
     const isOwner = Boolean(uid && uid === ownerUid);
@@ -128,71 +151,34 @@ export default async function listingsRoutes(app: FastifyInstance) {
         : reply.code(404).send({ ok: false, error: 'not_found' });
     }
 
-    const buildId = item.buildId;
-    if (!buildId) {
-      return reply.code(400).send({ ok: false, error: 'no_build' });
-    }
-
-    const buildDir = getBuildDir(buildId);
-    const bundleIndex = path.join(buildDir, 'bundle', 'index.html');
-    let hasLocalBundle = false;
     try {
-      await fs.access(bundleIndex);
-      hasLocalBundle = true;
-    } catch {}
-
-    try {
-      const outPng = path.join(buildDir, 'preview.png');
-      await fs.mkdir(path.dirname(outPng), { recursive: true });
-
       const ct = (req.headers['content-type'] || '').toString();
-      if (/^multipart\/form-data/i.test(ct)) {
-        // Handle manual screenshot upload
-        await fs.mkdir(path.dirname(outPng), { recursive: true });
-        const file = await (req as any).file?.();
-        if (!file) return reply.code(400).send({ ok: false, error: 'no_file' });
-        const buf = await file.toBuffer();
-        await fs.writeFile(outPng, buf);
-      } else {
-        // Regenerate via headless browser
-        // Prefer local file bundle; if missing, fall back to published HTTP asset under /public/builds/:id
-        const publicBase = (process.env.PUBLIC_BASE || `http://127.0.0.1:${process.env.PORT || 8788}`).replace(/\/$/, '');
-        const url = hasLocalBundle
-          ? `file://${bundleIndex.replace(/\\/g, '/')}`
-          : `${publicBase}/public/builds/${encodeURIComponent(buildId)}/index.html`;
-        const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
-        try {
-          const page = await browser.newPage();
-          await page.setViewport({ width: 1280, height: 720, deviceScaleFactor: 1 });
-          // Restrict network: allow only our target origin (for HTTP) or file/data
-          await page.setRequestInterception(true);
-          page.on('request', (r) => {
-            const u = r.url();
-            try {
-              if (u.startsWith('file://') || u.startsWith('data:')) return r.continue();
-              if (!hasLocalBundle) {
-                const origin = new URL(url).origin;
-                if (u.startsWith(origin)) return r.continue();
-              }
-            } catch {}
-            r.abort();
-          });
-          await page.goto(url, { waitUntil: hasLocalBundle ? 'domcontentloaded' : 'networkidle2', timeout: 60000 });
-          // Small settle delay (Puppeteer v24+: no waitForTimeout)
-          await new Promise((res) => setTimeout(res, 300));
-          await fs.mkdir(path.dirname(outPng), { recursive: true });
-          await page.screenshot({ path: outPng as `${string}.png`, type: 'png' });
-        } finally {
-          await browser.close();
-        }
+      if (!/^multipart\/form-data/i.test(ct)) {
+        return reply.code(400).send({ ok: false, error: 'preview_upload_required' });
       }
+      const file = await (req as any).file?.();
+      if (!file) return reply.code(400).send({ ok: false, error: 'no_file' });
+      const buf = await file.toBuffer();
+      if (!buf.length) return reply.code(400).send({ ok: false, error: 'empty_file' });
 
-      const previewUrl = `/builds/${buildId}/preview.png`;
-      apps[idx] = { ...item, previewUrl, updatedAt: Date.now() } as any;
+      const previewUrl = await saveListingPreviewFile({
+        listingId: String(item.id),
+        slug: item.slug,
+        buffer: buf,
+        mimeType: file.mimetype,
+        previousUrl: item.previewUrl,
+      });
+
+      const next: AppRecord = {
+        ...item,
+        previewUrl,
+        updatedAt: Date.now(),
+      };
+      apps[idx] = next;
       await writeApps(apps);
       return reply.send({ ok: true, previewUrl });
     } catch (err) {
-      req.log.error({ err, slug, buildId }, 'preview_regen_failed');
+      req.log.error({ err, slug }, 'preview_upload_failed');
       return reply.code(500).send({ ok: false, error: 'preview_failed' });
     }
   });

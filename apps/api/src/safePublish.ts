@@ -344,6 +344,13 @@ export class SafePublishPipeline {
     if (process.env.SAFE_PUBLISH_ENABLED !== 'true') return;
     const manifest = this.readManifest(dir);
     const entry = manifest?.entry || 'index.js';
+
+    // HTML apps don't have a JS entry point for the smoke test.
+    if (entry.endsWith('.html')) {
+      this.log.info({ entry }, 'smokeTest:skip_html');
+      return;
+    }
+
     const entryPath = path.join(dir, entry);
     if (!fs.existsSync(entryPath)) return;
     const script = [
@@ -518,5 +525,4 @@ export class SafePublishPipeline {
     }
   }
 }
-
 

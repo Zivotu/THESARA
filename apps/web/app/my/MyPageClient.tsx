@@ -11,6 +11,8 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { translateReason } from '@/lib/reviewReasons';
 import { useI18n } from '@/lib/i18n-provider';
 import { getPlayUrl } from '@/lib/play';
+import { useRelativeTime } from '@/hooks/useRelativeTime';
+import { resolvePreviewUrl } from '@/lib/preview';
 import {
   useConnectStatus,
   startStripeOnboarding,
@@ -59,6 +61,11 @@ function timeSince(ts?: number) {
   if (mo < 12) return `${mo}mo ago`;
   const y = Math.floor(mo / 12);
   return `${y}y ago`;
+}
+
+function RelativeTime({ ts }: { ts?: number }) {
+  const value = useRelativeTime(ts ?? null, timeSince);
+  return <>{value || ''}</>;
 }
 
 async function buildHeaders(withJson: boolean): Promise<Record<string, string>> {
@@ -346,9 +353,7 @@ export default function MyProjectsPage() {
   }, [items, query, visibilityFilter, sort]);
 
   const imgSrc = (it: Listing) => {
-    if (!it.previewUrl) return `/assets/app-default.svg`;
-    if (it.previewUrl.startsWith('http')) return it.previewUrl;
-    return `${API_URL}${it.previewUrl}`;
+    return resolvePreviewUrl(it.previewUrl);
   };
 
   const copyLink = (it: Listing) => {
@@ -700,7 +705,7 @@ export default function MyProjectsPage() {
 
                     <div className="mt-3 flex items-center justify-between text-xs text-gray-600">
                       <span title={it.createdAt ? new Date(it.createdAt).toLocaleString() : ''}>
-                        {timeSince(it.createdAt)}
+                        <RelativeTime ts={it.createdAt} />
                       </span>
                       <div className="flex items-center gap-3">
                         {typeof it.playCount === 'number' && (

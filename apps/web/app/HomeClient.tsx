@@ -16,6 +16,7 @@ import AppCard, { type Listing } from '@/components/AppCard';
 import { useEntitlements } from '@/hooks/useEntitlements';
 import { useI18n } from '@/lib/i18n-provider';
 import type { Listing as ApiListing } from '@/lib/types';
+import { resolvePreviewUrl } from '@/lib/preview';
 export {};
 type HomeClientProps = {
   initialItems?: ApiListing[];
@@ -111,11 +112,7 @@ function DetailsModal({ open, item, onClose }: { open: boolean; item: Listing | 
   }, [open, item?.slug, locale]);
   if (!open || !item) return null;
   const data = (full || item) as Listing;
-  const imgSrc = data.previewUrl
-    ? data.previewUrl.startsWith('http')
-      ? data.previewUrl
-      : `${API_URL}${data.previewUrl}`
-    : `/assets/app-default.svg`;
+  const imgSrc = resolvePreviewUrl(data.previewUrl);
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
@@ -460,7 +457,7 @@ export default function HomeClient({ initialItems = [] }: HomeClientProps) {
               >
                 {[...topLiked, ...topLiked].map((it, idx) => {
                   const hasPreview = !!it.previewUrl;
-                  const img = hasPreview ? (it.previewUrl!.startsWith('http') ? it.previewUrl! : `${API_URL}${it.previewUrl}`) : `/assets/app-default.svg`;
+                  const img = hasPreview ? resolvePreviewUrl(it.previewUrl) : `/assets/app-default.svg`;
                   const imgProps = idx === 0 ? { priority: true, loading: 'eager' as const } : {};
                   return (
                     <div key={`${it.id}-${idx}`} data-carousel-item ref={idx === 0 ? firstSlideRef : undefined} className="w-[280px] flex-none">

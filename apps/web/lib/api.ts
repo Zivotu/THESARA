@@ -49,9 +49,28 @@ async function apiFetchRaw(path: string, opts: ApiOptions = {}): Promise<Respons
         if (token && !('Authorization' in hdrs)) hdrs['Authorization'] = `Bearer ${token}`;
       }
     } catch {}
+    if (!('Authorization' in hdrs)) {
+      try {
+        const urlToken = new URL(window.location.href).searchParams.get('token');
+        if (urlToken) hdrs['Authorization'] = `Bearer ${urlToken}`;
+      } catch {}
+    }
   }
 
-  if (body !== undefined && !hdrs['Content-Type']) {
+  const isFormData =
+    typeof FormData !== 'undefined' && body instanceof FormData;
+  const isBlob =
+    typeof Blob !== 'undefined' && body instanceof Blob;
+  const isUrlEncoded =
+    typeof URLSearchParams !== 'undefined' && body instanceof URLSearchParams;
+  const isArrayBuffer =
+    typeof ArrayBuffer !== 'undefined' && body instanceof ArrayBuffer;
+  const isView = typeof ArrayBuffer !== 'undefined' && ArrayBuffer.isView(body as any);
+  const isReadable =
+    typeof ReadableStream !== 'undefined' && body instanceof ReadableStream;
+  const isBinaryBody = isFormData || isBlob || isUrlEncoded || isArrayBuffer || isView || isReadable;
+
+  if (body !== undefined && !hdrs['Content-Type'] && !isBinaryBody) {
     hdrs['Content-Type'] = 'application/json';
   }
 
@@ -67,7 +86,12 @@ async function apiFetchRaw(path: string, opts: ApiOptions = {}): Promise<Respons
       credentials: 'include',
       cache: 'no-store',
       headers: hdrs,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body:
+        body === undefined
+          ? undefined
+          : isBinaryBody
+          ? (body as BodyInit)
+          : JSON.stringify(body),
       signal: signal || controller.signal,
     });
   } finally {

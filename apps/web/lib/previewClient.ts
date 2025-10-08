@@ -43,6 +43,14 @@ async function buildAuthHeaders(forceRefresh = false): Promise<Record<string, st
 }
 
 export async function uploadPreviewFile(slug: string, file: File) {
+  if (file.size > MAX_PREVIEW_SIZE_BYTES) {
+    const maxMb = Math.round((MAX_PREVIEW_SIZE_BYTES / (1024 * 1024)) * 10) / 10;
+    throw new PreviewUploadError(
+      400,
+      `Preview image must be ${maxMb}MB or smaller`,
+      'preview_too_large'
+    );
+  }
 
   const headers = await buildAuthHeaders();
 
@@ -77,44 +85,6 @@ export async function uploadPreviewFile(slug: string, file: File) {
   if (!res.ok) {
 
     const message = json?.message || `Failed to upload preview (${res.status})`;
-
-    throw new PreviewUploadError(res.status, message, json?.error);
-
-  }
-
-  return json ?? (await res.json().catch(() => ({})));
-
-}
-
-export async function triggerAutoPreview(slug: string, opts: { forceRefreshToken?: boolean } = {}) {
-
-  const headers = await buildAuthHeaders(opts.forceRefreshToken ?? false);
-
-  const res = await fetch(buildPreviewUrl(slug), {
-
-    method: 'POST',
-
-    credentials: 'include',
-
-    headers,
-
-  });
-
-  let json: any = null;
-
-  try {
-
-    json = await res.clone().json();
-
-  } catch {
-
-    // ignore
-
-  }
-
-  if (!res.ok) {
-
-    const message = json?.message || `Failed to refresh preview (${res.status})`;
 
     throw new PreviewUploadError(res.status, message, json?.error);
 
@@ -187,14 +157,17 @@ async function renderOverlay(blob: Blob, text: string): Promise<Blob> {
 
   const overlayHeight = fontSize + Math.round(padding * 0.8);
   const blockHeight = overlayHeight + Math.round(padding * 0.4);
-  ctx.fillStyle = 'rgba(15, 23, 42, 0.72)';
-  ctx.fillRect(0, height - blockHeight, width, blockHeight);
+  const blockTop = Math.max(height - blockHeight, 0);
+  const blockCenterY = blockTop + blockHeight / 2;
+
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.78)';
+  ctx.fillRect(0, blockTop, width, blockHeight);
 
   ctx.fillStyle = '#fff';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.font = `700 ${fontSize}px ${fontFamily}`;
-  ctx.fillText(trimmed, width / 2, height - blockHeight / 2);
+  ctx.fillText(trimmed, width / 2, blockCenterY);
 
   return await new Promise((resolve, reject) => {
     canvas.toBlob(
@@ -274,7 +247,7 @@ export const PREVIEW_PRESET_PATHS = [
 
 ] as const;
 
-export const MAX_PREVIEW_SIZE_BYTES = 3 * 1024 * 1024; // 3MB
+export const MAX_PREVIEW_SIZE_BYTES = 1 * 1024 * 1024; // 1MB
 
 export type PreviewPresetPath = typeof PREVIEW_PRESET_PATHS[number];
 

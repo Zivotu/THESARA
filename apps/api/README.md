@@ -54,3 +54,34 @@ Creators use **Stripe Connect Standard** accounts. Call
 ## Troubleshooting
 
 If preview refresh fails or the player shows a blank page, see `docs/troubleshooting.md` for common causes and fixes (owner/admin checks, bundle not found, React hook crash hints, SES/lockdown issues).
+
+## Local‑Dev Static CI/CD (ZIP → Build → Preview)
+
+- Redis: `pnpm dev:redis` (root) starts `redis:7-alpine` via `docker-compose.dev.yml`.
+- Dev runner: `pnpm dev` (root) runs API and the local build worker in parallel.
+
+Environment (apps/api/.env.example):
+- `THESARA_ENV=local`
+- `REDIS_URL=redis://127.0.0.1:6379`
+- `THESARA_STORAGE_ROOT=./.devdata` (uploads, build-tmp, hosted-apps, logs)
+- `THESARA_PUBLIC_BASE=http://localhost:8788`
+- `DEV_BUILD_MODE=native` (optional: `docker` if Docker is available)
+
+Endpoints (available on the API server):
+- `POST /apps/:appId/upload` and `POST /api/apps/:appId/upload` — attach a Vite/React ZIP; returns `{ jobId }`.
+- `GET /apps/:appId/build-status/:jobId` and `GET /api/apps/:appId/build-status/:jobId` — returns `status` and `log` tail if failed.
+- `GET /preview/:appId/*` — serves static from `.devdata/hosted-apps/<appId>/dist` with SPA fallback.
+- `GET /api/health` — `{ ok: true }`.
+
+Worker behavior:
+- Unzips into `.devdata/build-tmp/<appId>-<jobId>/`.
+- Builds via `pnpm install --frozen-lockfile` and `pnpm run build` (native), or executes docker image `thesara/buildkit:node20` when `DEV_BUILD_MODE=docker` and Docker is present.
+- Requires `pnpm-lock.yaml` and expects a `dist/` output.
+- Deploys atomically to `.devdata/hosted-apps/<appId>/dist`.
+- Logs streamed to `.devdata/logs/<appId>/<jobId>.log`.
+- Audits: ZIP SHA256 and `dist.tar.gz` SHA256 saved in same log directory.
+
+Notes:
+- `@fastify/multipart` is registered; uploads use `req.file()`.
+- `appId` must match `^[a-z0-9-]{1,63}$`.
+- For Docker builds locally, ensure you have built the image `thesara/buildkit:node20` (see VPS pack section) or set `DEV_BUILD_MODE=native`.

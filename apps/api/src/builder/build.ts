@@ -4,7 +4,6 @@ import crypto from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
 import * as esbuild from "esbuild";
-import puppeteer from "puppeteer";
 import { playHtmlTemplate } from "../play/template.js";
 import { parse } from "@babel/parser";
 import traverse from "@babel/traverse";
@@ -16,9 +15,7 @@ const NAME_SHIM = 'var __name = globalThis.__name || (globalThis.__name = (fn,na
 const NAME_SHIM_FILE = "__name-shim.js";
 
 // === Types ===
-export type Opts = CdnOpts & {
-  makePreview?: boolean; // generiraj preview.png sa Puppeteerom
-};
+export type Opts = CdnOpts;
 
 const sha1 = (s: string) => crypto.createHash("sha1").update(s).digest("hex");
 const ensureDir = async (dir: string) => fs.mkdir(dir, { recursive: true });
@@ -75,8 +72,6 @@ type BuildResult =
       id: string;
       dir: string;
       indexPath: string;
-      previewPath?: string | null;
-      previewUrl?: string | null;
     }
   | {
       ok: false;
@@ -206,20 +201,7 @@ export async function buildFromHtml(html: string, opts: Opts & { id?: string; ti
     await fs.writeFile(indexPath, injectNameShim(html), "utf8");
     await writeNameShim(outDir);
 
-    let previewPath: string | null = null;
-    if (opts.makePreview) {
-      try {
-        const png = path.join(outDir, "preview.png");
-        await screenshot(indexPath, png);
-        previewPath = png;
-      } catch {
-        previewPath = null;
-      }
-    }
-
-    const previewUrl = previewPath ? `/builds/${id}/preview.png` : null;
-
-    return { ok: true, id, dir: outDir, indexPath, previewPath, previewUrl };
+    return { ok: true, id, dir: outDir, indexPath };
   } catch (e: any) {
     return { ok: false, error: e?.message ?? String(e) };
   }
@@ -477,20 +459,8 @@ export async function buildFromReact(
     await fs.writeFile(indexPath, injectNameShim(html), "utf8");
     await writeNameShim(outDir);
 
-    let previewPath: string | null = null;
-    if (opts.makePreview) {
-      try {
-        const png = path.join(outDir, "preview.png");
-        await screenshot(indexPath, png);
-        previewPath = png;
-      } catch {
-        previewPath = null;
-      }
-    }
-
-    const previewUrl = previewPath ? `/builds/${id}/preview.png` : null;
     console.log("build:done");
-    return { ok: true, id, dir: outDir, indexPath, previewPath, previewUrl };
+    return { ok: true, id, dir: outDir, indexPath };
   } catch (e: any) {
     const err = e?.errors?.[0];
     const errMsg = err?.text || e?.message || String(e);
@@ -502,16 +472,3 @@ export async function buildFromReact(
   }
 }
 
-// ——— preview helper ———
-async function screenshot(indexHtmlPath: string, outPngPath: string) {
-  const browser = await puppeteer.launch({ headless: true, args: ["--no-sandbox"] });
-  try {
-    const page = await browser.newPage();
-    const url = `file://${indexHtmlPath.replace(/\\/g, "/")}`;
-    await page.setViewport({ width: 1280, height: 720, deviceScaleFactor: 1 });
-    await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
-    await page.screenshot({ path: outPngPath as `${string}.png`, type: "png" });
-  } finally {
-    await browser.close();
-  }
-}

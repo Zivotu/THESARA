@@ -9,8 +9,11 @@ import { API_URL } from '@/lib/config';
 import { useAuth } from '@/lib/auth';
 import { getCreatorHandle } from '@/lib/creators';
 import { getPlayUrl } from '@/lib/play';
+import { auth } from '@/lib/firebase';
+import { resolvePreviewUrl } from '@/lib/preview';
 import Avatar from '@/components/Avatar';
 import { useI18n } from '@/lib/i18n-provider';
+import { useRelativeTime } from '@/hooks/useRelativeTime';
 
 // Types
 export type Listing = {
@@ -76,12 +79,7 @@ const AppCard = React.memo(
     const { locale } = useI18n();
     const subscribedLabel = locale === 'hr' ? 'Pretplaćeno' : 'Subscribed';
 
-    const imgSrc = item.previewUrl
-      ? item.previewUrl.startsWith('http')
-        ? item.previewUrl
-        : `${API_URL}${item.previewUrl}`
-      : `/assets/app-default.svg`;
-
+    const imgSrc = resolvePreviewUrl(item.previewUrl);
     const newBadge = Date.now() - item.createdAt < 1000 * 60 * 60 * 24 * 7;
     const likedCount = item.likesCount || 0;
     const isHot = likedCount > 100;
@@ -94,20 +92,24 @@ const AppCard = React.memo(
 
     const handlePlayClick = async (e: React.MouseEvent) => {
       e.stopPropagation();
+      const dest = await getPlayUrl(item.id);
+      const activeUser = user ?? auth?.currentUser ?? null;
+      const isOwner = !!activeUser?.uid && !!item.author?.uid && activeUser.uid === item.author.uid;
       // If app is paid and current user isn't the creator, send users to paywall instead of direct play
-      if (typeof item.price === 'number' && item.price > 0 && !isCreator) {
+      if (typeof item.price === 'number' && item.price > 0 && !isOwner) {
         router.push(`/paywall?slug=${encodeURIComponent(item.slug)}`);
         return;
       }
-      const dest = await getPlayUrl(item.id);
-      if (!user?.uid) {
+      if (!activeUser?.uid) {
         router.push(`/login?next=${encodeURIComponent(dest)}`);
       } else {
         router.push(dest);
       }
     };
 
-    const isCreator = !!user?.uid && !!item.author?.uid && user!.uid === item.author!.uid;
+    const activeUid = user?.uid || auth?.currentUser?.uid || null;
+    const isCreator = !!activeUid && !!item.author?.uid && activeUid === item.author.uid;
+    const relativeCreated = useRelativeTime(item.createdAt, timeSince);
 
     const handleDetailsClick = (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -227,7 +229,7 @@ const AppCard = React.memo(
               </button>
             </div>
             <div className="mt-4 flex items-center justify-between text-sm text-gray-500">
-              <span>{timeSince(item.createdAt)}</span>
+              <span>{relativeCreated || ''}</span>
               <div className="flex items-center gap-4">
                 <span className="flex items-center gap-1">
                   <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -351,7 +353,7 @@ const AppCard = React.memo(
             </div>
           )}
           <div className="mt-auto pt-4 flex items-center justify-between text-sm text-gray-500">
-            <span>{timeSince(item.createdAt)}</span>
+            <span>{relativeCreated || ''}</span>
             <div className="flex items-center gap-4">
               <span className="flex items-center gap-1">
                 <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">

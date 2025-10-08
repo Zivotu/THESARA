@@ -188,7 +188,6 @@ export interface BuildArtifacts {
 export async function getBuildArtifacts(id: string): Promise<BuildArtifacts> {
   const dir = getBuildDir(id);
   const buildDir = path.join(dir, 'build');
-  const previewPath = path.join(dir, 'preview.png');
   const astPath = path.join(buildDir, 'AST_SUMMARY.json');
   const manifestPath = path.join(buildDir, 'manifest_v1.json');
   const llmPath = path.join(dir, 'llm.json');
@@ -201,9 +200,7 @@ export async function getBuildArtifacts(id: string): Promise<BuildArtifacts> {
   const localBundleExists = await dirExists(localBundleDir);
 
   return {
-    preview: (await fileExists(previewPath))
-      ? { exists: true, url: `/builds/${id}/preview.png` }
-      : { exists: false },
+    preview: { exists: false },
     ast: (await fileExists(astPath))
       ? { exists: true, url: `/builds/${id}/build/AST_SUMMARY.json` }
       : { exists: false },

@@ -7,6 +7,7 @@ import { joinUrl } from '@/lib/url';
 import { auth } from '@/lib/firebase';
 import { API_URL } from '@/lib/config';
 import Logo from '@/components/Logo';
+import { resolvePreviewUrl } from '@/lib/preview';
 
 async function buildHeaders(withJson: boolean): Promise<Record<string, string>> {
   const headers: Record<string, string> = withJson
@@ -388,11 +389,7 @@ return (
           </thead>
           <tbody>
             {filtered.map((it) => {
-              const imgSrc = it.previewUrl
-                ? it.previewUrl.startsWith('http')
-                  ? it.previewUrl
-                  : joinUrl(API_URL, it.previewUrl)
-                : '/assets/app-default.svg';
+              const imgSrc = resolvePreviewUrl(it.previewUrl);
               return (
                 <tr key={it.id} className="border-t">
                   <td className="p-2">{it.id}</td>

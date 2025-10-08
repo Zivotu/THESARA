@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useState, useRef, useCallback } from 'react';
+import { Suspense, useEffect, useMemo, useState, useRef, useCallback, ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useRouteParam } from '@/hooks/useRouteParam';
 import Link from 'next/link';
@@ -20,6 +20,16 @@ import {
   useConnectStatus,
   startStripeOnboarding,
 } from '@/hooks/useConnectStatus';
+import { useRelativeTime } from '@/hooks/useRelativeTime';
+import {
+  MAX_PREVIEW_SIZE_BYTES,
+  PREVIEW_PRESET_PATHS,
+  PreviewPresetPath,
+  PreviewUploadError,
+  uploadPreviewFile,
+  uploadPresetPreview,
+} from '@/lib/previewClient';
+import { resolvePreviewUrl } from '@/lib/preview';
 
 // ------------------------------------------------------------------
 // Types
@@ -328,10 +338,79 @@ function AppDetailClient() {
   const [likeCount, setLikeCount] = useState(0);
   const [likeBusy, setLikeBusy] = useState(false);
 
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-const [previewBusy, setPreviewBusy] = useState(false);
-const [imgVersion, setImgVersion] = useState(0);
-const [allowed, setAllowed] = useState(true);
+  const previewInputRef = useRef<HTMLInputElement | null>(null);
+  const [previewBusy, setPreviewBusy] = useState(false);
+  const [imgVersion, setImgVersion] = useState(0);
+  const [allowed, setAllowed] = useState(true);
+  const overlayMaxChars = 22;
+  const maxPreviewMb = useMemo(
+    () => Math.round((MAX_PREVIEW_SIZE_BYTES / (1024 * 1024)) * 10) / 10,
+    []
+  );
+  const [previewChoice, setPreviewChoice] = useState<'preset' | 'custom'>('preset');
+  const [selectedPreset, setSelectedPreset] = useState<PreviewPresetPath>(PREVIEW_PRESET_PATHS[0]);
+  const [presetOverlay, setPresetOverlay] = useState('');
+  const [customPreview, setCustomPreview] = useState<{ file: File; dataUrl: string } | null>(null);
+  const [previewError, setPreviewError] = useState('');
+  const [previewApplied, setPreviewApplied] = useState(false);
+  const relativeCreated = useRelativeTime(item?.createdAt ?? null, timeSince);
+
+  const readFileAsDataUrl = useCallback(async (file: File) => {
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('read_error'));
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.readAsDataURL(file);
+    });
+  }, []);
+
+  const handlePresetSelect = useCallback((preset: PreviewPresetPath) => {
+    setPreviewChoice('preset');
+    setSelectedPreset(preset);
+    setCustomPreview(null);
+    setPreviewApplied(false);
+    setPreviewError('');
+  }, []);
+
+  const handleCustomPreview = useCallback(
+    async (e: ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      previewInputRef.current = e.target;
+      if (!file) return;
+
+      setPreviewApplied(false);
+      setPreviewError('');
+
+      if (file.size > MAX_PREVIEW_SIZE_BYTES) {
+        setPreviewError(`${tApp('previewFileTooLarge')} ${maxPreviewMb}MB`);
+        setCustomPreview(null);
+        setPreviewChoice('preset');
+        if (previewInputRef.current) previewInputRef.current.value = '';
+        return;
+      }
+
+      try {
+        const dataUrl = await readFileAsDataUrl(file);
+        setCustomPreview({ file, dataUrl });
+        setPreviewChoice('custom');
+      } catch {
+        setPreviewError(tApp('previewFileReadFailed'));
+        setCustomPreview(null);
+        setPreviewChoice('preset');
+        if (previewInputRef.current) previewInputRef.current.value = '';
+      }
+    },
+    [maxPreviewMb, readFileAsDataUrl, tApp]
+  );
+
+  const resetCustomPreview = useCallback(() => {
+    setCustomPreview(null);
+    setPreviewChoice('preset');
+    setPreviewApplied(false);
+    setPreviewError('');
+    if (previewInputRef.current) previewInputRef.current.value = '';
+  }, []);
+
   const [showPayModal, setShowPayModal] = useState(false);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -374,6 +453,58 @@ useEffect(() => {
   const connect = useConnectStatus();
   const canMonetize =
     connect?.payouts_enabled && (connect.requirements_due ?? 0) === 0;
+  const previewDisplayUrl = useMemo(
+    () =>
+      previewChoice === 'custom' && customPreview?.dataUrl
+        ? customPreview.dataUrl
+        : selectedPreset,
+    [customPreview?.dataUrl, previewChoice, selectedPreset]
+  );
+  const previewOverlayText = useMemo(
+    () => (previewChoice === 'preset' ? presetOverlay.trim().slice(0, overlayMaxChars) : ''),
+    [overlayMaxChars, presetOverlay, previewChoice]
+  );
+  const presetOverlayLabel = previewChoice === 'preset' ? previewOverlayText : '';
+
+  const applySelectedPreview = useCallback(async () => {
+    if (!item || !canEdit || previewBusy) return;
+    if (previewChoice === 'custom' && !customPreview?.file) {
+      setPreviewError(tApp('previewSelectFileFirst'));
+      return;
+    }
+
+    setPreviewBusy(true);
+    setPreviewApplied(false);
+    setPreviewError('');
+
+    try {
+      let response: any;
+      if (previewChoice === 'custom' && customPreview?.file) {
+        response = await uploadPreviewFile(item.slug, customPreview.file);
+      } else {
+        response = await uploadPresetPreview(item.slug, selectedPreset, {
+          overlayText: previewOverlayText,
+        });
+      }
+      if (response?.previewUrl) {
+        setItem((prev) => (prev ? { ...prev, previewUrl: response.previewUrl } : prev));
+      }
+      setImgVersion((v) => v + 1);
+      setPreviewApplied(true);
+      setToast({ message: tApp('previewUploadSuccess'), type: 'success' });
+    } catch (err: any) {
+      let message = tApp('previewUploadFailed');
+      if (err instanceof PreviewUploadError) {
+        message = err.message || message;
+      } else if (err instanceof Error) {
+        message = err.message || message;
+      }
+      setPreviewError(message);
+      setToast({ message, type: 'error' });
+    } finally {
+      setPreviewBusy(false);
+    }
+  }, [canEdit, customPreview?.file, item, previewBusy, previewChoice, previewOverlayText, selectedPreset, tApp]);
 
   useEffect(() => {
     if (item?.author?.handle) {
@@ -546,16 +677,16 @@ useEffect(() => {
     load();
   }, [slug, buildHeaders, user?.uid, router]);
 
-    const imgSrc = useMemo(() => {
-    // Until the listing is approved/published, show a neutral placeholder
+  const imgSrc = useMemo(() => {
     if (item?.status && item.status !== 'published') {
       return `${API_URL}/assets/preview-placeholder.svg`;
     }
-        if (!item?.previewUrl) return `/assets/app-default.svg`;
-    const base = item.previewUrl.startsWith('http')
-      ? item.previewUrl
-      : `${API_URL}${item.previewUrl}`;
-    return `${base}?v=${imgVersion}`;
+    const resolved = resolvePreviewUrl(item?.previewUrl);
+    if (item?.previewUrl?.startsWith('/uploads/')) {
+      const separator = resolved.includes('?') ? '&' : '?';
+      return `${resolved}${separator}v=${imgVersion}`;
+    }
+    return resolved;
   }, [item?.status, item?.previewUrl, imgVersion]);
 
   async function loadSessions() {
@@ -637,85 +768,7 @@ useEffect(() => {
     return () => clearInterval(intervalId);
   }, [item, slug, buildHeaders, user?.uid, isAdmin]);
 
-  const refreshPreview = async () => {
-    if (!item || previewBusy) return;
-    setPreviewBusy(true);
-    try {
-      const res = await fetch(`${API_URL}/listing/${item.slug}/preview`, {
-        method: 'POST',
-        headers: await buildHeaders(false),
-        credentials: 'include',
-      });
-      let json: any = null;
-      try { json = await res.clone().json(); } catch {}
-      if (!res.ok) {
-        const code = json?.error;
-        let msg = `Failed to refresh preview (${res.status})`;
-        if (res.status === 401) msg = 'Not authenticated';
-        else if (res.status === 403 || code === 'not_owner') msg = 'Only the owner or an admin can refresh the preview';
-        else if (res.status === 404 && (code === 'not_found' || code === 'bundle_not_found')) msg = 'Bundle not found for this app';
-        else if (res.status === 400 && code === 'no_build') msg = 'This app has no build yet';
-        setToast({ message: msg, type: 'error' });
-        throw new Error(code || `http_${res.status}`);
-      }
-      const jsonOk = json ?? (await res.json());
-      if (jsonOk?.previewUrl) {
-        setItem((prev) => (prev ? { ...prev, previewUrl: jsonOk.previewUrl } : prev));
-        setImgVersion((v) => v + 1);
-        setToast({ message: 'Preview refreshed!', type: 'success' });
-      } else {
-        throw new Error('no_preview');
-      }
-    } catch (e) {
-      handleFetchError(e, 'Failed to refresh preview');
-      // toast is already set for HTTP errors above; generic fallback:
-      setToast((t) => t ?? { message: 'Failed to refresh preview. Please check the API URL and server status.', type: 'error' });
-    } finally {
-      setPreviewBusy(false);
-    }
-  };
 
-  const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !item || previewBusy) return;
-    setPreviewBusy(true);
-    try {
-      const form = new FormData();
-      form.append('image', file);
-      const res = await fetch(`${API_URL}/listing/${item.slug}/preview`, {
-        method: 'POST',
-        headers: await buildHeaders(false),
-        credentials: 'include',
-        body: form,
-      });
-      let json: any = null;
-      try { json = await res.clone().json(); } catch {}
-      if (!res.ok) {
-        const code = json?.error;
-        let msg = `Failed to upload screenshot (${res.status})`;
-        if (res.status === 401) msg = 'Not authenticated';
-        else if (res.status === 403 || code === 'not_owner') msg = 'Only the owner or an admin can upload a screenshot';
-        else if (res.status === 404 && (code === 'not_found' || code === 'bundle_not_found')) msg = 'Bundle not found for this app';
-        else if (res.status === 400 && code === 'no_build') msg = 'This app has no build yet';
-        setToast({ message: msg, type: 'error' });
-        throw new Error(code || `http_${res.status}`);
-      }
-      const jsonOk = json ?? (await res.json());
-      if (jsonOk?.previewUrl) {
-        setItem((prev) => (prev ? { ...prev, previewUrl: jsonOk.previewUrl } : prev));
-        setImgVersion((v) => v + 1);
-        setToast({ message: 'Screenshot uploaded!', type: 'success' });
-      } else {
-        throw new Error('no_preview');
-      }
-    } catch (e) {
-      handleFetchError(e, 'Failed to upload screenshot');
-      setToast((t) => t ?? { message: 'Failed to upload screenshot. Please check the API URL and server status.', type: 'error' });
-    } finally {
-      setPreviewBusy(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
 
   // Save changes
   const onSave = async (
@@ -1060,7 +1113,7 @@ useEffect(() => {
                   <>
                     <span>•</span>
                     <time title={new Date(item.createdAt).toLocaleString()}>
-                      {timeSince(item.createdAt)}
+                      {relativeCreated || ''}
                     </time>
                   </>
                 )}
@@ -1258,43 +1311,130 @@ useEffect(() => {
                 </div>
               </div>
               {canEdit && (
-                <>
+                <div className="border-t border-gray-200 bg-white">
                   <input
+                    ref={previewInputRef}
                     type="file"
                     accept="image/*"
-                    ref={fileInputRef}
-                    onChange={onFileChange}
                     className="hidden"
+                    onChange={handleCustomPreview}
                   />
-                  <div className="flex justify-end gap-2 p-2 bg-white border-t border-gray-200">
-                    <button
-                      onClick={refreshPreview}
-                      disabled={previewBusy}
-                      title="Refresh screenshot"
-                      className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-800 disabled:opacity-50"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v6h6M20 20v-6h-6M4 10a8 8 0 018-8 8 8 0 018 8M20 14a8 8 0 01-8 8 8 8 0 01-8-8" />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={previewBusy}
-                      title="Upload screenshot"
-                      className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-800 disabled:opacity-50"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M8 12l4-4 4 4M12 8v8" />
-                      </svg>
-                    </button>
+                  <div className="p-4 space-y-4">
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-900">{tApp('previewGraphic')}</h3>
+                      <p className="text-xs text-gray-600 mt-1">{tApp('previewGraphicHint')}</p>
+                    </div>
+                    <div className="grid sm:grid-cols-3 gap-3">
+                      {PREVIEW_PRESET_PATHS.map((preset) => {
+                        const isSelected = previewChoice === 'preset' && selectedPreset === preset;
+                        return (
+                          <button
+                            key={preset}
+                            type="button"
+                            onClick={() => handlePresetSelect(preset)}
+                            className={`relative rounded-lg overflow-hidden border transition shadow-sm ${
+                              isSelected ? 'border-emerald-500 ring-2 ring-emerald-400' : 'border-gray-200 hover:border-emerald-300'
+                            }`}
+                          >
+                        <img src={preset} alt="" className="w-full aspect-video object-cover" />
+                        {isSelected && <div className="absolute inset-0 bg-emerald-600/10 pointer-events-none" />}
+                        {presetOverlayLabel && (
+                          <div className="absolute inset-x-0 bottom-0 bg-slate-900/80 text-white text-xs font-semibold text-center leading-snug py-1.5 px-3 break-words">
+                            {presetOverlayLabel}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                    </div>
+                    {previewChoice === 'preset' && (
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-700">
+                          {tApp('previewTitleLabel')}{' '}
+                          <span className="font-normal text-gray-500">
+                            ({overlayMaxChars} {tApp('characters')})
+                          </span>
+                        </label>
+                        <input
+                          value={presetOverlay}
+                          onChange={(e) => {
+                            setPresetOverlay(e.target.value.slice(0, overlayMaxChars));
+                            setPreviewApplied(false);
+                            setPreviewError('');
+                          }}
+                          maxLength={overlayMaxChars}
+                          className="mt-1 w-full border rounded px-3 py-2 text-sm focus:ring-emerald-500 focus:border-emerald-500"
+                          placeholder={tApp('previewTitlePlaceholder')}
+                        />
+                        <p className="text-[11px] text-gray-500 mt-1">{tApp('previewTitleHint')}</p>
+                      </div>
+                    )}
+                    <div className="flex flex-wrap items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => previewInputRef.current?.click()}
+                        className="px-3 py-2 rounded border border-emerald-500 text-emerald-700 text-sm font-medium hover:bg-emerald-50 transition disabled:opacity-60 disabled:cursor-not-allowed"
+                        disabled={previewBusy}
+                      >
+                        {tApp('chooseCustomGraphic')}
+                      </button>
+                      {customPreview && (
+                        <button
+                          type="button"
+                          onClick={resetCustomPreview}
+                          className="text-sm text-gray-600 underline disabled:opacity-60"
+                          disabled={previewBusy}
+                        >
+                          {tApp('removeCustomGraphic')}
+                        </button>
+                      )}
+                      <span className="text-[11px] text-gray-500">
+                        {tApp('customGraphicHint')} {maxPreviewMb}MB
+                      </span>
+                    </div>
+                    <div className="rounded-xl border border-gray-200 overflow-hidden">
+                      <div className="relative aspect-video bg-gray-100">
+                        <img
+                          src={previewDisplayUrl}
+                          alt="Preview choice"
+                          className="w-full h-full object-cover"
+                        />
+                        {previewChoice === 'preset' && presetOverlayLabel && (
+                          <div className="absolute inset-x-0 bottom-0 bg-slate-900/80 text-white text-sm font-semibold text-center leading-snug py-2 px-4 break-words">
+                            {presetOverlayLabel}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={applySelectedPreview}
+                        disabled={
+                          previewBusy ||
+                          !canEdit ||
+                          (previewChoice === 'custom' && !customPreview?.file)
+                        }
+                        className="px-4 py-2 rounded bg-emerald-600 text-white text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed hover:bg-emerald-700 transition"
+                      >
+                        {previewBusy ? tApp('savingGraphic') : tApp('saveGraphic')}
+                      </button>
+                      {!previewBusy && previewApplied && !previewError && (
+                        <span className="text-xs text-emerald-600">{tApp('previewUploadSuccess')}</span>
+                      )}
+                      {previewBusy && (
+                        <span className="text-xs text-gray-500">{tApp('previewUploading')}</span>
+                      )}
+                    </div>
+                    {previewError && <p className="text-sm text-red-600">{previewError}</p>}
                   </div>
-                </>
-              )}
-              {canEdit && (
-                <div className="p-4 bg-gray-50/50">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-700 font-medium">App ID:</span>
-                    <code className="font-mono bg-gray-900 text-emerald-400 px-3 py-1 rounded border border-gray-700">{item.slug}</code>
+                  <div className="px-4 pb-4 bg-gray-50/50">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-700 font-medium">App ID:</span>
+                      <code className="font-mono bg-gray-900 text-emerald-400 px-3 py-1 rounded border border-gray-700">
+                        {item.slug}
+                      </code>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1795,7 +1935,7 @@ useEffect(() => {
                         <span className="font-medium text-gray-900">{item.author.name || 'Anonymous'}</span>
                       )}
                       {item.createdAt && (
-                        <span className="text-xs text-gray-500">Published {timeSince(item.createdAt)}</span>
+                        <span className="text-xs text-gray-500">Published {relativeCreated || ''}</span>
                       )}
                     </div>
                   </div>

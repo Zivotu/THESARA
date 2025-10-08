@@ -1,0 +1,5 @@
+{
+  "name": "Pub Quiz",
+  "description": "A multi-user pub quiz application where an admin controls the game flow. Players join with a PIN, answer questions, and see a leaderboard at the end. The admin can import questions and export results.",
+  "requestFramePermissions": []
+}

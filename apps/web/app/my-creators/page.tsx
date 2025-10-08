@@ -8,6 +8,7 @@ import Avatar from '@/components/Avatar';
 import { API_URL } from '@/lib/config';
 import { useAuth } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
+import { resolvePreviewUrl } from '@/lib/preview';
 
 type FavoriteCreator = {
   id: string;
@@ -146,9 +147,7 @@ export default function MyCreatorsPage() {
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {apps.slice(0, 6).map((a) => {
-                      const img = a.previewUrl
-                        ? (a.previewUrl.startsWith('http') ? a.previewUrl : `${API_URL}${a.previewUrl}`)
-                        : '/assets/app-default.svg';
+                      const img = resolvePreviewUrl(a.previewUrl);
                       return (
                         <Link key={a.id} href={`/app/${a.slug}`} className="group block">
                           <div className="relative aspect-video rounded-lg overflow-hidden border">

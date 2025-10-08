@@ -6,6 +6,7 @@
   "main": "dist/server.mjs",
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "dev:worker": "tsx watch src/localdev/worker.run.ts",
     "build": "tsup --config tsup.config.ts",
     "build:bundle": "tsup --config tsup.config.ts",
     "start": "node dist/server.mjs",

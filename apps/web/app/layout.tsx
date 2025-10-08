@@ -6,6 +6,7 @@ import ChunkErrorBoundary from '@/components/ChunkErrorBoundary';
 import { AuthProvider } from '@/lib/auth';
 import I18nRootProvider from '@/components/I18nRootProvider';
 import { messages as ALL_MESSAGES, type Locale, defaultLocale } from '@/i18n/config';
+import { getServerLocale } from '@/lib/locale';
 
 export const metadata = {
   title: 'CreateX',
@@ -19,10 +20,10 @@ if (typeof window !== 'undefined') {
   });
 }
 
-const locale: Locale = defaultLocale;
-const messages = ALL_MESSAGES[locale] || ALL_MESSAGES[defaultLocale];
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  const locale: Locale = await getServerLocale(defaultLocale);
+  const messages = ALL_MESSAGES[locale] || ALL_MESSAGES[defaultLocale];
 
-export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang={locale} suppressHydrationWarning>
       <body className="min-h-screen bg-white text-gray-900">

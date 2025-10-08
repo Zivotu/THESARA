@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+﻿import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
@@ -9,6 +9,7 @@ import { getBuildDir } from '../paths.js';
 import { readApps, writeApps, type AppRecord, listEntitlements } from '../db.js';
 import { getConfig } from '../config.js';
 import { computeNextVersion } from '../lib/versioning.js';
+import { ensureListingPreview } from '../lib/preview.js';
 
 function slugify(input: string): string {
   return input
@@ -152,21 +153,17 @@ function slugify(input: string): string {
           slug = `${baseSlug}-${cnt++}`;
         }
       }
-
       const { version, archivedVersions } = computeNextVersion(existing, now);
       const sanitizeTranslations = (input?: Record<string, { title?: string; description?: string }>) => {
-        const out: Record<string, { title?: string; description?: string }> = {};
+        const out: Record<string, { description?: string }> = {};
         for (const [loc, obj] of Object.entries(input || {})) {
           const l = String(loc).toLowerCase().slice(0, 2);
           if (!['en','hr','de'].includes(l)) continue;
-          const title = (obj?.title ?? '').toString().trim();
           const description = (obj?.description ?? '').toString().trim();
-          if (!title && !description) continue;
-          out[l] = {};
-          if (title) out[l].title = title;
-          if (description) out[l].description = description;
+          if (!description) continue;
+          out[l] = { description };
         }
-        return out;
+        return out as any;
       };
 
       if (existing) {
@@ -201,7 +198,8 @@ function slugify(input: string): string {
             (base as any).translations[k] = { ...(base as any).translations[k], ...v };
           }
         }
-        apps[idx] = base;
+        const { next } = ensureListingPreview(base);
+        apps[idx] = next;
       } else {
         const base: AppRecord = {
           id: String(listingId),
@@ -228,11 +226,12 @@ function slugify(input: string): string {
         };
         const provided = sanitizeTranslations(body.translations);
         if (Object.keys(provided).length) (base as any).translations = provided as any;
-        apps.push(base);
+        const { next } = ensureListingPreview(base);
+        apps.push(next);
       }
       await writeApps(apps);
       req.log.info({ buildId, listingId, slug }, 'publish:created');
-      // Best‑effort admin notification on submission (with richer context)
+      // Bestâ€‘effort admin notification on submission (with richer context)
       try {
         const cfg = getConfig();
         const title = (body.title || '').trim() || `App ${listingId}`;
@@ -243,8 +242,8 @@ function slugify(input: string): string {
         const email = claims.email || undefined;
         const prettyAuthor = [displayName, authorHandle]
           .filter(Boolean)
-          .join(' · ');
-        const subject = `Novo slanje: ${title}${prettyAuthor ? ` — ${prettyAuthor}` : ''}`;
+          .join(' Â· ');
+        const subject = `Novo slanje: ${title}${prettyAuthor ? ` â€” ${prettyAuthor}` : ''}`;
         const lines: string[] = [];
         lines.push(`Naslov: ${title}`);
         lines.push(`ID: ${listingId}`);
@@ -252,11 +251,11 @@ function slugify(input: string): string {
         lines.push(`Build ID: ${buildId}`);
         lines.push(`Autor UID: ${authorUid}`);
         if (displayName) lines.push(`Autor: ${displayName}`);
-        if (authorHandle) lines.push(`Korisničko ime: @${authorHandle}`);
+        if (authorHandle) lines.push(`KorisniÄko ime: @${authorHandle}`);
         if (email) lines.push(`E-mail: ${email}`);
         const desc = String(body.description || '').trim();
         if (desc) {
-          const short = desc.length > 300 ? desc.slice(0, 300) + '…' : desc;
+          const short = desc.length > 300 ? desc.slice(0, 300) + 'â€¦' : desc;
           lines.push('');
           lines.push('Opis:');
           lines.push(short);
@@ -265,9 +264,9 @@ function slugify(input: string): string {
         const webBase = (cfg.WEB_BASE || 'http://localhost:3000').replace(/\/$/, '');
         const apiBase = (cfg.PUBLIC_BASE || `http://127.0.0.1:${cfg.PORT}`).replace(/\/$/, '');
         lines.push('Linkovi:');
-        lines.push(`• Admin pregled: ${webBase}/admin/`);
-        lines.push(`• Status builda: ${apiBase}/build/${buildId}/status`);
-        lines.push(`• Događaji builda (SSE): ${apiBase}/build/${buildId}/events`);
+        lines.push(`â€¢ Admin pregled: ${webBase}/admin/`);
+        lines.push(`â€¢ Status builda: ${apiBase}/build/${buildId}/status`);
+        lines.push(`â€¢ DogaÄ‘aji builda (SSE): ${apiBase}/build/${buildId}/events`);
         await notifyAdmins(subject, lines.join('\n'));
       } catch {}
       // Best-effort background translation for core locales
@@ -294,3 +293,5 @@ function slugify(input: string): string {
   app.post('/createx/publish', handler);
   app.post('/createx/publish/', handler);
 }
+
+

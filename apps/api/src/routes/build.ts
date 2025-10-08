@@ -75,7 +75,6 @@ export default async function buildRoutes(app: FastifyInstance) {
       if (e?.code === 'ENOENT') {
         const dir = getBuildDir(id);
         const required = [
-          { name: 'preview.png', path: path.join(dir, 'preview.png') },
           { name: 'build/AST_SUMMARY.json', path: path.join(dir, 'build', 'AST_SUMMARY.json') },
           { name: 'build/manifest_v1.json', path: path.join(dir, 'build', 'manifest_v1.json') },
           { name: 'llm.json', path: path.join(dir, 'llm.json') },
@@ -111,11 +110,6 @@ export default async function buildRoutes(app: FastifyInstance) {
 
     const resp: any = { ok: true, state, progress, artifacts };
     if (listing) resp.listingId = listing.id;
-    if (artifacts.preview.exists) {
-      resp.preview = artifacts.preview.url;
-    } else if (state === 'published') {
-      resp.error = 'artifacts_missing';
-    }
     if (error && !resp.error) resp.error = error;
     if (publicUrl) resp.public = publicUrl;
     reply.send(resp);

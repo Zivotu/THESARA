@@ -33,9 +33,9 @@ function pickBaseUrl(cfg: ApiConfig): string {
 function toPrompt(item: { title: string; description: string }, locales: string[]) {
   const langs = locales.map((l) => l.toLowerCase()).join(', ');
   return (
-    'You are a professional translator. Translate the following app title and description into the requested languages.' +
+    'You are a professional translator. Translate the following app description into the requested languages.' +
     ' Keep the tone natural and concise for an app marketplace. Return only valid JSON.' +
-    '\nSchema: {"translations": {"<locale>": {"title": string, "description": string}}}\n' +
+    '\nSchema: {"translations": {"<locale>": {"description": string}}}\n' +
     `Locales: [${langs}]` +
     `\nTitle: ${item.title}\nDescription: ${item.description || ''}`
   );
@@ -100,11 +100,11 @@ export async function translateListing(
     }
   }
   const tr = parsed?.translations || {};
-  const out: ListingTranslations = {};
+  const out: ListingTranslations = {} as any;
   for (const l of locales) {
     const it = tr[l] || tr[l.toLowerCase()];
-    if (it?.title) {
-      out[l] = { title: String(it.title), description: String(it.description || '') };
+    if (it) {
+      out[l] = { title: item.title, description: String(it.description || "") } as any;
     }
   }
   return out;
@@ -123,7 +123,7 @@ export async function ensureListingTranslations(
   if (!isTranslationEnabledForConfig(cfg)) {
     return hasExisting ? current : null;
   }
-  const missing = locales.filter((l) => !current?.[l]?.title);
+  const missing = locales.filter((l) => !current?.[l]?.description);
   if (missing.length === 0) {
     return current;
   }
@@ -147,3 +147,4 @@ export async function ensureListingTranslations(
   await ref.set({ translations: merged }, { merge: true });
   return merged;
 }
+

@@ -7,7 +7,6 @@ import { analyzeExports } from './builder/build.js';
 import { cdnImportPlugin } from './builder/cdnPlugin.js';
 import { buildTailwindCSS } from './builder/tailwind.js';
 import { PREVIEW_ROOT, getBuildDir } from './paths.js';
-import puppeteer from 'puppeteer';
 import { getConfig } from './config.js';
 import {
   initBuild,
@@ -213,49 +212,6 @@ async function runJob(job: Job): Promise<void> {
           await fs.rm(dest, { recursive: true, force: true });
           await fs.mkdir(dest, { recursive: true });
           await fs.cp(src, dest, { recursive: true });
-          // Generate preview screenshot in a constrained headless browser
-          try {
-            const indexFile = path.join(dest, 'index.html');
-            const url = `file://${indexFile.replace(/\\\\/g, '/')}`;
-            const outPng = path.join(getBuildDir(id), 'preview.png');
-            const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
-            try {
-              const page = await browser.newPage();
-              await page.setViewport({ width: 1280, height: 720, deviceScaleFactor: 1 });
-              // Block external network requests for safety (allow CDN if using external ESM)
-              await page.setRequestInterception(true);
-              page.on('request', (req) => {
-                const u = req.url();
-                if (!EXTERNAL_HTTP_ESM) {
-                  if (u.startsWith('file://') || u.startsWith('data:')) req.continue();
-                  else req.abort();
-                  return;
-                }
-                // Allow local files and our CDN base for externalized HTTP ESM
-                try {
-                  const cdn = (CDN_BASE || 'https://esm.sh').replace(/\/+$/, '');
-                  const cdnOrigin = new URL(cdn).origin;
-                  if (u.startsWith('file://') || u.startsWith('data:') || u.startsWith(cdnOrigin)) {
-                    req.continue();
-                  } else {
-                    req.abort();
-                  }
-                } catch {
-                  if (u.startsWith('file://') || u.startsWith('data:')) req.continue();
-                  else req.abort();
-                }
-              });
-              await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-              // Let the app render a frame if it uses requestAnimationFrame
-              // Puppeteer v24+: waitForTimeout removed — use a simple delay
-              await new Promise((res) => setTimeout(res, 300));
-              await page.screenshot({ path: outPng as `${string}.png`, type: 'png' });
-            } finally {
-              await browser.close();
-            }
-          } catch (err) {
-            log?.info?.({ id, err: (err as any)?.message || String(err) }, 'preview:failed');
-          }
         },
       },
     ];

@@ -75,7 +75,9 @@ export default async function publicRoutes(app: FastifyInstance) {
   });
   app.get('/play/:id/*', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const rest = (req.params as any)['*'] as string;
+    const restRaw = (req.params as any)['*'] as string;
+    const rest = (restRaw || '').replace(/^\/+/, '').replace(/\/{2,}/g, '/');
+    const encRestSafe = encRest(rest);
     try {
       const apps = await readApps();
       const item = apps.find((a) => a.slug === id || String(a.id) === id) as
@@ -83,16 +85,53 @@ export default async function publicRoutes(app: FastifyInstance) {
         | undefined;
       if (item?.buildId) {
         const mapped = item.buildId;
+        // Prefer bucket-hosted assets when available
         try {
           const bucket = getBucket();
-          const file = bucket.file(`builds/${mapped}/index.html`);
-          const [exists] = await file.exists();
-          if (exists) return reply.redirect(`/public/builds/${encSeg(mapped)}/${encRest(rest)}`, 302);
+          const bundleFile = bucket.file(`builds/${mapped}/bundle/${rest}`);
+          const [bundleExists] = await bundleFile.exists();
+          if (bundleExists) {
+            return reply.redirect(
+              `/public/builds/${encSeg(mapped)}/bundle/${encRestSafe}`,
+              302,
+            );
+          }
+          const rootFile = bucket.file(`builds/${mapped}/${rest}`);
+          const [rootExists] = await rootFile.exists();
+          if (rootExists) {
+            return reply.redirect(
+              `/public/builds/${encSeg(mapped)}/${encRestSafe}`,
+              302,
+            );
+          }
         } catch {}
-        return reply.redirect(`/builds/${encSeg(mapped)}/bundle/${encRest(rest)}`, 302);
+        const dir = getBuildDir(mapped);
+        try {
+          await fs.access(path.join(dir, 'bundle', rest));
+          return reply.redirect(
+            `/builds/${encSeg(mapped)}/bundle/${encRestSafe}`,
+            302,
+          );
+        } catch {}
+        try {
+          await fs.access(path.join(dir, rest));
+          return reply.redirect(
+            `/builds/${encSeg(mapped)}/${encRestSafe}`,
+            302,
+          );
+        } catch {}
+        return reply.redirect(
+          `/review/builds/${encSeg(mapped)}/${encRestSafe}`,
+          302,
+        );
       }
       const byBuild = apps.find((a) => a.buildId === id);
-      if (byBuild) return reply.redirect(`/play/${encSeg(byBuild.id)}/${encRest(rest)}`, 302);
+      if (byBuild) {
+        return reply.redirect(
+          `/play/${encSeg(byBuild.id)}/${encRestSafe}`,
+          302,
+        );
+      }
     } catch {}
     return reply.code(404).send({ error: 'not_found' });
   });

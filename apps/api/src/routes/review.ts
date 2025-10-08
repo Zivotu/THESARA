@@ -13,12 +13,12 @@ import {
   publishBundle,
 } from '../models/Build.js';
 import { getConfig, LLM_REVIEW_ENABLED } from '../config.js';
-import puppeteer from 'puppeteer';
 import { notifyAdmins } from '../notifier.js';
-import { BUNDLE_ROOT, getBuildDir } from '../paths.js';
+import { BUNDLE_ROOT } from '../paths.js';
 import { readApps, writeApps } from '../db.js';
 import { runLlmReviewForBuild } from '../llmReview.js';
 import { computeNextVersion } from '../lib/versioning.js';
+import { ensureListingPreview } from '../lib/preview.js';
 
 export default async function reviewRoutes(app: FastifyInstance) {
   const admin = { preHandler: requireRole('admin') };
@@ -255,45 +255,6 @@ export default async function reviewRoutes(app: FastifyInstance) {
     try {
       await publishBundle(id);
       await updateBuild(id, { state: 'published' });
-      // Always (re)generate preview.png after publish
-      try {
-        const cfg = getConfig();
-        const outPng = path.join(cfg.BUNDLE_STORAGE_PATH, 'builds', id, 'preview.png');
-        const buildDir = getBuildDir(id);
-        const bundleIndex = path.join(buildDir, 'bundle', 'index.html');
-        let hasLocalBundle = false;
-        try { await fs.access(bundleIndex); hasLocalBundle = true; } catch {}
-
-        const publicBase = (cfg.PUBLIC_BASE || `http://127.0.0.1:${cfg.PORT}`).replace(/\/$/, '');
-        const url = hasLocalBundle
-          ? `file://${bundleIndex.replace(/\\/g, '/')}`
-          : `${publicBase}/public/builds/${encodeURIComponent(id)}/index.html`;
-        const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
-        try {
-          const page = await browser.newPage();
-          await page.setViewport({ width: 1280, height: 720, deviceScaleFactor: 1 });
-          await page.setRequestInterception(true);
-          page.on('request', (r) => {
-            const u = r.url();
-            try {
-              if (u.startsWith('file://') || u.startsWith('data:')) return r.continue();
-              if (!hasLocalBundle) {
-                const origin = new URL(url).origin;
-                if (u.startsWith(origin)) return r.continue();
-              }
-            } catch {}
-            r.abort();
-          });
-          await page.goto(url, { waitUntil: hasLocalBundle ? 'domcontentloaded' : 'networkidle2', timeout: 60000 });
-          await new Promise((res) => setTimeout(res, 300));
-          await fs.mkdir(path.dirname(outPng), { recursive: true });
-          await page.screenshot({ path: outPng as `${string}.png`, type: 'png' });
-        } finally {
-          await browser.close();
-        }
-      } catch (err) {
-        req.log.error({ err, id }, 'preview_auto_failed');
-      }
       try {
         const apps = await readApps();
         const idx = apps.findIndex(
@@ -313,14 +274,10 @@ export default async function reviewRoutes(app: FastifyInstance) {
           app.status = 'published';
           app.state = 'active';
           app.playUrl = `/play/${app.id}/`;
-          // Set previewUrl to freshly generated image if present
-          try {
-            const cfg2 = getConfig();
-            const p2 = path.join(cfg2.BUNDLE_STORAGE_PATH, 'builds', id, 'preview.png');
-            await fs.access(p2);
-            app.previewUrl = `/builds/${id}/preview.png`;
-          } catch {}
-          
+          const ensured = ensureListingPreview(app as any);
+          if (ensured.changed) {
+            apps[idx] = ensured.next as any;
+          }
           app.publishedAt = now;
           app.updatedAt = now;
           await writeApps(apps);
