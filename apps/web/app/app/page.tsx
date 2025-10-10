@@ -53,7 +53,7 @@ type Listing = {
   state?: 'active' | 'inactive';
   pin?: string;
   price?: number;
-  status?: 'draft' | 'published' | 'pending-review' | 'rejected';
+  status?: 'draft' | 'published' | 'approved' | 'pending-review' | 'rejected';
   moderation?: { status?: string; reasons?: string[] };
   translations?: Record<string, { title?: string; description?: string }>;
 };
@@ -678,7 +678,10 @@ useEffect(() => {
   }, [slug, buildHeaders, user?.uid, router]);
 
   const imgSrc = useMemo(() => {
-    if (item?.status && item.status !== 'published') {
+    const shouldForcePlaceholder = Boolean(
+      item?.status && !['published', 'approved'].includes(item.status) && !canEdit,
+    );
+    if (shouldForcePlaceholder) {
       return `${API_URL}/assets/preview-placeholder.svg`;
     }
     const resolved = resolvePreviewUrl(item?.previewUrl);
@@ -687,7 +690,7 @@ useEffect(() => {
       return `${resolved}${separator}v=${imgVersion}`;
     }
     return resolved;
-  }, [item?.status, item?.previewUrl, imgVersion]);
+  }, [canEdit, item?.status, item?.previewUrl, imgVersion]);
 
   async function loadSessions() {
     setRefreshingSessions(true);
