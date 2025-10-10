@@ -33,6 +33,8 @@ interface ManifestDraft {
 type Mode = 'html' | 'react';
 type SubmissionType = 'code' | 'bundle';
 
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
 const friendlyByCode: Record<string, string> = {
   NET_OPEN_NEEDS_DOMAINS: 'Dodaj barem jednu domenu (npr. api.example.com).',
   NET_DOMAIN_NOT_ALLOWED: 'Ta domena nije dopuÅ¡tena.',
@@ -106,16 +108,10 @@ export default function CreatePage() {
   const [customPreview, setCustomPreview] = useState<{ file: File; dataUrl: string } | null>(null);
   const [previewError, setPreviewError] = useState('');
   const [previewUploading, setPreviewUploading] = useState(false);
-  const [queuedPreviewUpload, setQueuedPreviewUpload] = useState<{
-    slug: string;
-    choice: 'preset' | 'custom';
-    preset?: PreviewPresetPath;
-    overlay?: string;
-    file?: File;
-  } | null>(null);
   const [previewAppliedSlug, setPreviewAppliedSlug] = useState<string | null>(null);
   const previewInputRef = useRef<HTMLInputElement | null>(null);
   const bundleInputRef = useRef<HTMLInputElement | null>(null);
+  const pendingPreviewSlugRef = useRef<string | null>(null);
   const overlayMaxChars = 22;
   const maxPreviewMb = useMemo(
     () => Math.round((MAX_PREVIEW_SIZE_BYTES / (1024 * 1024)) * 10) / 10,
@@ -272,26 +268,63 @@ export default function CreatePage() {
     if (previewInputRef.current) previewInputRef.current.value = '';
   }, []);
 
-  const queuePreviewForSlug = useCallback(
-    (slug: string) => {
-      if (!slug) return;
-      const trimmedOverlay = presetOverlay.trim().slice(0, overlayMaxChars);
-      if (previewChoice === 'custom' && customPreview?.file) {
-        setQueuedPreviewUpload({
-          slug,
-          choice: 'custom',
-          file: customPreview.file,
-        });
-      } else {
-        setQueuedPreviewUpload({
-          slug,
-          choice: 'preset',
-          preset: selectedPreset,
-          overlay: trimmedOverlay || undefined,
-        });
+  const ensurePreviewForSlug = useCallback(
+    async (slug: string): Promise<boolean> => {
+      if (!slug) return false;
+      if (previewAppliedSlug === slug) return true;
+
+      const overlayText =
+        previewChoice === 'preset' ? presetOverlay.trim().slice(0, overlayMaxChars) : '';
+      const attempts = 3;
+
+      setPreviewUploading(true);
+      setPreviewError('');
+
+      try {
+        for (let attempt = 1; attempt <= attempts; attempt++) {
+          try {
+            if (previewChoice === 'custom' && customPreview?.file) {
+              await uploadPreviewFile(slug, customPreview.file);
+            } else {
+              await uploadPresetPreview(slug, selectedPreset, {
+                overlayText: overlayText || undefined,
+              });
+            }
+            setPreviewAppliedSlug(slug);
+            return true;
+          } catch (err: any) {
+            const shouldRetry =
+              err instanceof PreviewUploadError &&
+              attempt < attempts &&
+              [404, 409, 423, 425].includes(err.status);
+            if (shouldRetry) {
+              await sleep(500 * attempt);
+              continue;
+            }
+            let message = tCreate('previewUploadFailed');
+            if (err instanceof PreviewUploadError) {
+              message = err.message || message;
+            } else if (err instanceof Error) {
+              message = err.message || message;
+            }
+            setPreviewError(message);
+            return false;
+          }
+        }
+        return false;
+      } finally {
+        setPreviewUploading(false);
       }
     },
-    [customPreview?.file, overlayMaxChars, presetOverlay, previewChoice, selectedPreset]
+    [
+      customPreview?.file,
+      overlayMaxChars,
+      presetOverlay,
+      previewChoice,
+      previewAppliedSlug,
+      selectedPreset,
+      tCreate,
+    ]
   );
 
   const previewDisplayUrl = useMemo(
@@ -307,47 +340,6 @@ export default function CreatePage() {
     [overlayMaxChars, presetOverlay, previewChoice]
   );
   const presetOverlayLabel = previewChoice === 'preset' ? previewOverlayText : '';
-
-  useEffect(() => {
-    if (!queuedPreviewUpload) return;
-    let cancelled = false;
-
-    const run = async () => {
-      setPreviewUploading(true);
-      setPreviewError('');
-      try {
-        if (queuedPreviewUpload.choice === 'custom' && queuedPreviewUpload.file) {
-          await uploadPreviewFile(queuedPreviewUpload.slug, queuedPreviewUpload.file);
-        } else if (queuedPreviewUpload.choice === 'preset' && queuedPreviewUpload.preset) {
-          await uploadPresetPreview(queuedPreviewUpload.slug, queuedPreviewUpload.preset, {
-            overlayText: queuedPreviewUpload.overlay,
-          });
-        }
-        if (!cancelled) {
-          setPreviewAppliedSlug(queuedPreviewUpload.slug);
-          setQueuedPreviewUpload(null);
-        }
-      } catch (err: any) {
-        if (cancelled) return;
-        let message = tCreate('previewUploadFailed');
-        if (err instanceof PreviewUploadError) {
-          message = err.message || message;
-        } else if (err instanceof Error) {
-          message = err.message || message;
-        }
-        setPreviewError(message);
-        setQueuedPreviewUpload(null);
-      } finally {
-        if (!cancelled) setPreviewUploading(false);
-      }
-    };
-
-    void run();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [queuedPreviewUpload, tCreate]);
 
   const handleNext = () => setStep((s) => Math.min(s + 1, steps.length - 1));
   const handleBack = () => setStep((s) => Math.max(s - 1, 0));
@@ -418,8 +410,10 @@ export default function CreatePage() {
           if (!data.previewUrl) {
             setLocalPreviewUrl(joinUrl(API_URL, '/preview/', appId, '/'));
           }
-          if (data.slug) {
-            queuePreviewForSlug(data.slug);
+          const slug = data.slug || pendingPreviewSlugRef.current;
+          if (slug) {
+            pendingPreviewSlugRef.current = slug;
+            await ensurePreviewForSlug(slug);
           }
           router.push('/my?submitted=1');
         } else if (mapped === 'error') {
@@ -638,6 +632,7 @@ export default function CreatePage() {
     setAuthError('');
     setPreviewError('');
     setPreviewAppliedSlug(null);
+    pendingPreviewSlugRef.current = null;
     setBundleError('');
     setLocalJobLog('');
     setLocalPreviewUrl(null);
@@ -734,7 +729,7 @@ export default function CreatePage() {
           error?: { errorCode?: string; message?: string };
         }>('/publish', payload);
         if (json.slug) {
-          queuePreviewForSlug(json.slug);
+          pendingPreviewSlugRef.current = json.slug;
         }
         if (json.buildId) {
           watchBuild(json.buildId);
