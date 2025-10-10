@@ -259,9 +259,12 @@ export default async function publicRoutes(app: FastifyInstance) {
     const { slug } = req.params as { slug: string };
     const apps = await readApps();
     const item = apps.find((a) => a.slug === slug || String(a.id) === slug) as
-      | (AppRecord & { buildId?: string })
+      | (AppRecord & { buildId?: string; pendingBuildId?: string })
       | undefined;
-    if (!item || !item.buildId) return reply.code(404).send({ error: 'not_found' });
+
+    const buildId = item?.pendingBuildId || item?.buildId;
+
+    if (!item || !buildId) return reply.code(404).send({ error: 'not_found' });
     const isPublic = item.status === 'published' || item.state === 'active';
     if (!isPublic) return reply.code(404).send({ error: 'not_found' });
     await ensureAuthUid(req);
@@ -320,29 +323,32 @@ export default async function publicRoutes(app: FastifyInstance) {
     // Prefer bucket-hosted public files if present
     try {
       const bucket = getBucket();
-      const file = bucket.file(`builds/${item.buildId}/index.html`);
+      const file = bucket.file(`builds/${buildId}/index.html`);
       const [exists] = await file.exists();
-      if (exists) return reply.redirect(`/public/builds/${encSeg(item.buildId)}/index.html`, 302);
+      if (exists) return reply.redirect(`/public/builds/${encSeg(buildId)}/index.html`, 302);
     } catch {}
-    const dir = getBuildDir(item.buildId);
+    const dir = getBuildDir(buildId);
     try {
       await fs.access(path.join(dir, 'bundle', 'index.html'));
-      return reply.redirect(`/builds/${encSeg(item.buildId)}/bundle/`, 302);
+      return reply.redirect(`/builds/${encSeg(buildId)}/bundle/`, 302);
     } catch {}
     try {
       await fs.access(path.join(dir, 'index.html'));
-      return reply.redirect(`/builds/${encSeg(item.buildId)}/`, 302);
+      return reply.redirect(`/builds/${encSeg(buildId)}/`, 302);
     } catch {}
-    return reply.redirect(`/review/builds/${encSeg(item.buildId)}/`, 302);
+    return reply.redirect(`/review/builds/${encSeg(buildId)}/`, 302);
   });
   app.get('/app/:slug/*', async (req: FastifyRequest, reply: FastifyReply) => {
     const { slug } = req.params as { slug: string };
     const rest = (req.params as any)['*'] as string;
     const apps = await readApps();
     const item = apps.find((a) => a.slug === slug || String(a.id) === slug) as
-      | (AppRecord & { buildId?: string })
+      | (AppRecord & { buildId?: string; pendingBuildId?: string })
       | undefined;
-    if (!item || !item.buildId) return reply.code(404).send({ error: 'not_found' });
+
+    const buildId = item?.pendingBuildId || item?.buildId;
+
+    if (!item || !buildId) return reply.code(404).send({ error: 'not_found' });
     const isPublic = item.status === 'published' || item.state === 'active';
     if (!isPublic) return reply.code(404).send({ error: 'not_found' });
     await ensureAuthUid(req);
@@ -401,19 +407,19 @@ export default async function publicRoutes(app: FastifyInstance) {
     // Prefer bucket-hosted public files if present
     try {
       const bucket = getBucket();
-      const file = bucket.file(`builds/${item.buildId}/index.html`);
+      const file = bucket.file(`builds/${buildId}/index.html`);
       const [exists] = await file.exists();
-      if (exists) return reply.redirect(`/public/builds/${encSeg(item.buildId)}/${encRest(rest)}`, 302);
+      if (exists) return reply.redirect(`/public/builds/${encSeg(buildId)}/${encRest(rest)}`, 302);
     } catch {}
-    const dir = getBuildDir(item.buildId);
+    const dir = getBuildDir(buildId);
     try {
       await fs.access(path.join(dir, 'bundle', 'index.html'));
-      return reply.redirect(`/builds/${encSeg(item.buildId)}/bundle/${encRest(rest)}`, 302);
+      return reply.redirect(`/builds/${encSeg(buildId)}/bundle/${encRest(rest)}`, 302);
     } catch {}
     try {
       await fs.access(path.join(dir, 'index.html'));
-      return reply.redirect(`/builds/${encSeg(item.buildId)}/${encRest(rest)}`, 302);
+      return reply.redirect(`/builds/${encSeg(buildId)}/${encRest(rest)}`, 302);
     } catch {}
-    return reply.redirect(`/review/builds/${encSeg(item.buildId)}/${encRest(rest)}`, 302);
+    return reply.redirect(`/review/builds/${encSeg(buildId)}/${encRest(rest)}`, 302);
   });
 }

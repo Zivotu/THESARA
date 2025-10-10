@@ -3,7 +3,8 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import * as esbuild from 'esbuild';
-import { createJob, isJobActive } from '../buildQueue.js';
+import { isJobActive } from '../buildQueue.js';
+import { enqueueCreatexBuild } from '../workers/createxBuildWorker.js';
 import { notifyAdmins } from '../notifier.js';
 import { getBuildDir } from '../paths.js';
 import { readApps, writeApps, type AppRecord, listEntitlements } from '../db.js';
@@ -131,7 +132,7 @@ function slugify(input: string): string {
       return reply.code(400).send({ ok: false, error: 'build_failed' });
     }
 
-    await createJob(buildId, req.log);
+    await enqueueCreatexBuild(buildId);
     let listingId: number | undefined;
     try {
       const now = Date.now();
