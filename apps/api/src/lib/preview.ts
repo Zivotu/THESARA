@@ -24,10 +24,18 @@ function fallbackPreviewPath(slug?: string, id?: string): string {
   return PREVIEW_PRESET_PATHS[idx];
 }
 
+function looksLikeImageAsset(url: string): boolean {
+  const trimmed = url.trim();
+  if (!trimmed) return false;
+  if (/^data:image\//i.test(trimmed)) return true;
+  const withoutQuery = trimmed.split(/[?#]/)[0];
+  return /\.(png|jpe?g|gif|webp|svg)$/i.test(withoutQuery);
+}
+
 export function ensureListingPreview(record: AppRecord): { next: AppRecord; changed: boolean } {
   const current = (record.previewUrl || '').trim();
   const deprecated = current.startsWith('/builds/') || current.startsWith('/play/');
-  if (current && !deprecated) {
+  if (current && !deprecated && looksLikeImageAsset(current)) {
     return { next: record, changed: false };
   }
   const next: AppRecord = {
