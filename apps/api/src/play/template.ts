@@ -7,7 +7,6 @@ export function playHtmlTemplate(title: string, buildId?: string) {
     "  <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\" />",
     `  <title>${title}</title>`,
     "  <link rel=\"stylesheet\" href=\"./styles.css\" />",
-    "  <style>html,body{margin:0;padding:0} body{overflow-x:hidden} #root{min-height:100vh}</style>",
     "</head>",
     "<body class=\"dark\">",
     "  <div id=\"root\"></div>",
