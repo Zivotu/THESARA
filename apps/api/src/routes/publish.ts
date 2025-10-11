@@ -13,6 +13,27 @@ import { ensureListingPreview, saveListingPreviewFile } from '../lib/preview.js'
 import { writeArtifact } from '../utils/artifacts.js';
 import { bundleInlineApp } from '../lib/bundleInlineApp.js';
 
+const DEFAULT_INLINE_APP_STYLES = [
+  'html,body{margin:0;padding:0}',
+  'body{overflow-x:hidden}',
+  '#root{min-height:100vh}',
+].join('\n');
+
+const DEFAULT_INLINE_APP_HTML = [
+  '<!doctype html>',
+  '<html lang="en">',
+  '<head>',
+  '  <meta charset="utf-8" />',
+  '  <meta name="viewport" content="width=device-width,initial-scale=1" />',
+  '  <link rel="stylesheet" href="./styles.css" />',
+  '</head>',
+  '<body>',
+  '  <div id="root"></div>',
+  '  <script type="module" src="./app.js"></script>',
+  '</body>',
+  '</html>',
+].join('\n');
+
 function slugify(input: string): string {
   return input
     .toLowerCase()
@@ -125,7 +146,7 @@ function parseDataUrl(input: string | undefined): { mimeType: string; buffer: Bu
       await fs.mkdir(dir, { recursive: true });
 
       const isHtml = body.inlineCode.trim().toLowerCase().startsWith('<!doctype html>');
-      let indexHtml = '<!doctype html><html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /><style>html,body{margin:0;padding:0} body{overflow-x:hidden} #root{min-height:100vh}</style></head><body><div id="root"></div><script type="module" src="./app.js"></script></body></html>';
+      let indexHtml = DEFAULT_INLINE_APP_HTML;
       let appJs = '';
 
       if (isHtml) {
@@ -145,10 +166,16 @@ function parseDataUrl(input: string | undefined): { mimeType: string; buffer: Bu
       await fs.mkdir(buildDir, { recursive: true });
       await fs.writeFile(path.join(buildDir, 'index.html'), indexHtml, 'utf8');
       await fs.writeFile(path.join(buildDir, 'app.js'), appJs, 'utf8');
+      if (!isHtml) {
+        await fs.writeFile(path.join(buildDir, 'styles.css'), DEFAULT_INLINE_APP_STYLES, 'utf8');
+      }
 
       // Also keep top-level copies for debugging/inspection
       await fs.writeFile(path.join(dir, 'index.html'), indexHtml, 'utf8');
       await fs.writeFile(path.join(dir, 'app.js'), appJs, 'utf8');
+      if (!isHtml) {
+        await fs.writeFile(path.join(dir, 'styles.css'), DEFAULT_INLINE_APP_STYLES, 'utf8');
+      }
 
       // Ensure minimal manifest so the web UI can read /builds/:id/build/manifest_v1.json even
       // before background workers enrich artifacts. This prevents white screens.
