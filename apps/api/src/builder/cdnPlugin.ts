@@ -158,6 +158,12 @@ function normalizeEsmShReact(u: URL, pins: Record<string, string>) {
     u.search = ""; // canonicalize to avoid duplicate module identities
     return u;
   }
+  // react/jsx-dev-runtime
+  if (/^\/react(@[^/]+)?\/jsx-dev-runtime(?:\.m?js)?$/.test(pathname)) {
+    u.pathname = `/react@${reactPin}/jsx-dev-runtime`;
+    u.search = "";
+    return u;
+  }
   // react-dom/client
   if (/^\/react-dom(@[^/]+)?\/client(?:\.m?js)?$/.test(pathname)) {
     u.pathname = `/react-dom@${reactDomPin}/client`;
@@ -190,6 +196,7 @@ export function cdnImportPlugin(opts: Opts): esbuild.Plugin {
       "react-dom",
       "react-dom/client",
       "react/jsx-runtime",
+      "react/jsx-dev-runtime",
       "framer-motion",
       "recharts",
       "html-to-image",

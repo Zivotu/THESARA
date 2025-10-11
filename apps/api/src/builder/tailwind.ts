@@ -84,6 +84,11 @@ body {
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
+  overflow-x: hidden;
+}
+
+#root {
+  min-height: 100vh;
 }
 `;
 
