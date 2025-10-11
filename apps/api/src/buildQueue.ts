@@ -91,8 +91,19 @@ async function runJob(job: Job): Promise<void> {
         progress: 40,
         fn: async () => {
           const entry = path.join(dir, 'app.js');
+          const jsSource = await fs.readFile(entry, 'utf8');
+          const isEmptyEntry = !jsSource.trim();
           const outDir = path.join(dir, 'bundle');
           await fs.mkdir(outDir, { recursive: true });
+
+          if (isEmptyEntry) {
+            // Pure HTML submission â€“ copy the prebuilt HTML bundle without running esbuild/React bootstrap
+            const buildDir = path.join(dir, 'build');
+            await fs.rm(outDir, { recursive: true, force: true });
+            await fs.mkdir(outDir, { recursive: true });
+            await fs.cp(buildDir, outDir, { recursive: true });
+            return;
+          }
 
           // Create a virtual bootstrap with error overlay and dynamic import of the user module
           const virtualEntry = `

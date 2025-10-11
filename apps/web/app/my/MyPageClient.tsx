@@ -217,13 +217,17 @@ export default function MyProjectsPage() {
     );
 
   const handlePlayClick = useCallback(
-    async (e: React.MouseEvent, id: string) => {
+    async (e: React.MouseEvent, item: Listing & { status?: string }) => {
       e.preventDefault();
       e.stopPropagation();
-      const dest = await getPlayUrl(id);
-      window.open(dest, '_blank');
+      if (item.status !== 'published') {
+        setToast({ message: 'App must be approved before it can run.', type: 'info' });
+        return;
+      }
+      const dest = await getPlayUrl(item.id);
+      window.open(dest, '_blank', 'noopener,noreferrer');
     },
-    []
+    [setToast]
   );
 
   // — Load my listings (localized)
@@ -639,7 +643,7 @@ export default function MyProjectsPage() {
                         <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-center pb-4">
                           <button
                             type="button"
-                            onClick={(e) => handlePlayClick(e, it.id)}
+                            onClick={(e) => handlePlayClick(e, it)}
                             className="px-4 py-2 rounded-full bg-white/95 backdrop-blur text-gray-900 text-sm font-medium shadow-lg hover:bg-white transform hover:scale-105 transition"
                             title="Play in new tab"
                           >
@@ -736,7 +740,7 @@ export default function MyProjectsPage() {
                     <div className="p-4 border-t bg-gray-50/60 flex gap-2 flex-wrap">
                       <button
                         type="button"
-                        onClick={(e) => handlePlayClick(e, it.id)}
+                        onClick={(e) => handlePlayClick(e, it)}
                         className="flex-1 text-center px-4 py-2 rounded-full bg-emerald-600 text-white font-medium hover:bg-emerald-700 transition shadow-sm hover:shadow"
                         title="Play app"
                       >

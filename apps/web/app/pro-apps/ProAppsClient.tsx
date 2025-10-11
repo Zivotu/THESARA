@@ -1,4 +1,5 @@
-'use client';
+'use client';
+
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import React from 'react';
 import Link from 'next/link';
@@ -36,6 +37,11 @@ export default function ProAppsPage() {
     let retryCount = 0;
     const maxRetries = 3;
     const fetchData = async () => {
+      if (!user?.uid) {
+        setItems([]);
+        setIsLoading(false);
+        return;
+      }
       setIsLoading(true);
       try {
         const json = await apiFetch<{ items: Listing[] }>(`/me/subscribed-apps?lang=${encodeURIComponent(locale)}`, { auth: true });
@@ -47,14 +53,12 @@ export default function ProAppsPage() {
       } finally { setIsLoading(false); }
     };
     fetchData();
-  }, [locale]);
+  }, [locale, user?.uid]);
 
-  const fetched = useRef(false);
   useEffect(() => {
-    if (fetched.current) return;
-    fetched.current = true;
     load();
-  }, [load]);  useEffect(() => {
+  }, [load]);
+  useEffect(() => {
     let cancelled = false;
     (async () => {
       // After items are loaded, fetch missing handles for authors
@@ -74,15 +78,6 @@ export default function ProAppsPage() {
     })();
     return () => { cancelled = true };
   }, [items]);
-  // Re-fetch when locale changes to localize app fields
-  const lastLocaleRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!fetched.current) return;
-    if (lastLocaleRef.current === locale) return;
-    lastLocaleRef.current = locale;
-    load();
-  }, [locale, load]);
-
   return (
     <div className="min-h-screen text-gray-900 bg-white">
       <section className="max-w-7xl mx-auto px-4 pt-12 pb-6">

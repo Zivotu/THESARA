@@ -3,8 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import * as esbuild from 'esbuild';
-import { isJobActive } from '../buildQueue.js';
-import { enqueueCreatexBuild } from '../workers/createxBuildWorker.js';
+import { createJob, isJobActive } from '../buildQueue.js';
 import { notifyAdmins } from '../notifier.js';
 import { getBuildDir } from '../paths.js';
 import { readApps, writeApps, type AppRecord, listEntitlements } from '../db.js';
@@ -174,7 +173,14 @@ function parseDataUrl(input: string | undefined): { mimeType: string; buffer: Bu
       return reply.code(400).send({ ok: false, error: 'build_failed' });
     }
 
-    await enqueueCreatexBuild(buildId);
+    try {
+      await createJob(buildId, req.log);
+    } catch (err) {
+      req.log.error({ err }, 'publish:create_job_failed');
+      return reply
+        .code(503)
+        .send({ ok: false, error: 'build_queue_unavailable', message: 'Build queue unavailable' });
+    }
     let listingId: number | undefined;
     try {
       const now = Date.now();

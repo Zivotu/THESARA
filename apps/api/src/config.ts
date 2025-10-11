@@ -148,7 +148,7 @@ export function getConfig() {
       process.env.ALLOWED_ORIGINS || undefined,
     CDN_BASE: process.env.CDN_BASE || 'https://esm.sh',
     REDIS_URL,
-    EXTERNAL_HTTP_ESM: process.env.EXTERNAL_HTTP_ESM !== 'false',
+    EXTERNAL_HTTP_ESM: process.env.EXTERNAL_HTTP_ESM === 'true',
     // Liberal import policy by default unless explicitly turned off
     // Set ALLOW_ANY_NPM=0 to enforce allow-list from cdnImportPlugin
     ALLOW_ANY_NPM: process.env.ALLOW_ANY_NPM !== '0',

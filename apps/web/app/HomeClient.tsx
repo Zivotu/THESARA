@@ -154,7 +154,14 @@ function DetailsModal({ open, item, onClose }: { open: boolean; item: Listing | 
             </div>
           )}
           <div className="mt-5 flex flex-wrap gap-3">
-            <Link href={{ pathname: '/play', query: { appId: data.id, run: '1' } }} className="px-4 py-2 rounded-lg bg-emerald-600 text-white font-medium hover:bg-emerald-700">Play</Link>
+            <Link
+              href={{ pathname: '/play', query: { appId: data.id, run: '1' } }}
+              target="_blank"
+              rel="noreferrer"
+              className="px-4 py-2 rounded-lg bg-emerald-600 text-white font-medium hover:bg-emerald-700"
+            >
+              Play
+            </Link>
             <Link href={{ pathname: '/app', query: { slug: data.slug } }} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={onClose}>Full Details</Link>
           </div>
         </div>
@@ -218,6 +225,10 @@ export default function HomeClient({ initialItems = [] }: HomeClientProps) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      if (!user?.uid) {
+        setSubscribed(new Set());
+        return;
+      }
       try {
         const json = await apiGet('/me/subscribed-apps', { auth: true });
         const { normalizeList } = await import('@/lib/adapters');
@@ -232,7 +243,7 @@ export default function HomeClient({ initialItems = [] }: HomeClientProps) {
       }
     })();
     return () => { cancelled = true; };
-  }, [ent.data?.purchases?.length]);
+  }, [ent.data?.purchases?.length, user?.uid]);
 
   useEffect(() => {
     if (welcome) {

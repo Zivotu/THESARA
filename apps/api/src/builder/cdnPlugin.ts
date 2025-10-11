@@ -149,8 +149,8 @@ function normalizeEsmShReact(u: URL, pins: Record<string, string>) {
   if (!hostOk) return u;
 
   const pathname = u.pathname; // npr. /react@18.3.1/jsx-runtime
-  const reactPin = pins["react"] || "18.2.0";
-  const reactDomPin = pins["react-dom"] || "18.2.0";
+  const reactPin = pins["react"] || "19.2.0";
+  const reactDomPin = pins["react-dom"] || "19.2.0";
 
   // react/jsx-runtime
   if (/^\/react(@[^/]+)?\/jsx-runtime(?:\.m?js)?$/.test(pathname)) {
@@ -213,8 +213,8 @@ export function cdnImportPlugin(opts: Opts): esbuild.Plugin {
   // Pinovi (default + korisnički)
   const PIN: Record<string, string> = Object.assign(
     {
-      react: "18.2.0",
-      "react-dom": "18.2.0",
+      react: "19.2.0",
+      "react-dom": "19.2.0",
       "framer-motion": "11.0.0",
       recharts: "2.12.7",
       "html-to-image": "1.11.11",

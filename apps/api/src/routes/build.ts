@@ -120,6 +120,17 @@ export default async function buildRoutes(app: FastifyInstance) {
     let job = await readBuild(id);
     if (!job) return reply.code(404).send({ ok: false, error: 'not_found' });
 
+    const origin = req.headers.origin as string | undefined;
+    const cfg = getConfig();
+    const allowed =
+      typeof cfg.ALLOWED_ORIGINS === 'string' && cfg.ALLOWED_ORIGINS.trim()
+        ? cfg.ALLOWED_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean)
+        : [];
+    if (origin && (!allowed.length || allowed.includes(origin))) {
+      reply.raw.setHeader('Access-Control-Allow-Origin', origin);
+      reply.raw.setHeader('Access-Control-Allow-Credentials', 'true');
+    }
+    reply.raw.setHeader('Vary', 'Origin');
     reply.raw.setHeader('Content-Type', 'text/event-stream');
     reply.raw.setHeader('Cache-Control', 'no-cache');
     reply.raw.setHeader('Connection', 'keep-alive');

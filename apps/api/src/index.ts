@@ -292,8 +292,10 @@ export async function createServer() {
     const scriptSrc = scriptDomains.join(' ');
 
     const styleParts: string[] = ["'self'"];
-    if (networkPolicy === 'OPEN_NET') {
+    if (!styleParts.includes("'unsafe-inline'")) {
       styleParts.push("'unsafe-inline'");
+    }
+    if (networkPolicy === 'OPEN_NET') {
       if (networkDomains.length > 0) {
         for (const d of networkDomains) {
           try {

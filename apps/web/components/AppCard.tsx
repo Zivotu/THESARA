@@ -93,18 +93,28 @@ const AppCard = React.memo(
 
     const handlePlayClick = async (e: React.MouseEvent) => {
       e.stopPropagation();
-      const dest = await getPlayUrl(item.id);
       const activeUser = user ?? auth?.currentUser ?? null;
       const isOwner = !!activeUser?.uid && !!item.author?.uid && activeUser.uid === item.author.uid;
-      // If app is paid and current user isn't the creator, send users to paywall instead of direct play
+
+      const openInNewTab = (url: string) => {
+        if (typeof window !== 'undefined') {
+          window.open(url, '_blank', 'noopener,noreferrer');
+        } else {
+          router.push(url);
+        }
+      };
+
       if (typeof item.price === 'number' && item.price > 0 && !isOwner) {
-        router.push(`/paywall?slug=${encodeURIComponent(item.slug)}`);
+        openInNewTab(`/paywall?slug=${encodeURIComponent(item.slug)}`);
         return;
       }
+
+      const dest = await getPlayUrl(item.id);
+
       if (!activeUser?.uid) {
-        router.push(`/login?next=${encodeURIComponent(dest)}`);
+        openInNewTab(`/login?next=${encodeURIComponent(dest)}`);
       } else {
-        router.push(dest);
+        openInNewTab(dest);
       }
     };
 
