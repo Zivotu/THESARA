@@ -262,7 +262,7 @@ export default async function reviewRoutes(app: FastifyInstance) {
         );
         if (idx >= 0) {
           const now = Date.now();
-          const app = apps[idx];
+          let app = apps[idx];
           if (app.pendingBuildId === id) {
             const { version, archivedVersions } = computeNextVersion(app, now);
             app.archivedVersions = archivedVersions;
@@ -273,13 +273,18 @@ export default async function reviewRoutes(app: FastifyInstance) {
           }
           app.status = 'published';
           app.state = 'active';
+          // Ensure published apps are visible in marketplace
+          if ((app as any).visibility !== 'public') {
+            (app as any).visibility = 'public';
+          }
           app.playUrl = `/play/${app.id}/`;
           const ensured = ensureListingPreview(app as any);
           if (ensured.changed) {
-            apps[idx] = ensured.next as any;
+            app = ensured.next as any;
           }
           app.publishedAt = now;
           app.updatedAt = now;
+          apps[idx] = app;
           await writeApps(apps);
           // Ensure translations exist for supported locales after approval
           try {

@@ -1,28 +1,8 @@
 import path from 'node:path';
 import fs from 'node:fs/promises';
-import { randomBytes, createHash } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { getConfig } from '../config.js';
 import type { AppRecord } from '../types.js';
-
-export const PREVIEW_PRESET_PATHS = [
-  '/preview-presets/thesara_screenshot_1.png',
-  '/preview-presets/thesara_screenshot_2.png',
-  '/preview-presets/thesara_screenshot_3.png',
-  '/preview-presets/thesara_screenshot_4.png',
-  '/preview-presets/thesara_screenshot_5.png',
-] as const;
-
-function hashKey(value: string): number {
-  const hash = createHash('sha256').update(value).digest();
-  // Use first 4 bytes for a stable positive integer
-  return hash.readUInt32BE(0);
-}
-
-function fallbackPreviewPath(slug?: string, id?: string): string {
-  const key = (slug || id || randomBytes(4).toString('hex')).toLowerCase();
-  const idx = hashKey(key) % PREVIEW_PRESET_PATHS.length;
-  return PREVIEW_PRESET_PATHS[idx];
-}
 
 function looksLikeImageAsset(url: string): boolean {
   const trimmed = url.trim();
@@ -35,14 +15,15 @@ function looksLikeImageAsset(url: string): boolean {
 export function ensureListingPreview(record: AppRecord): { next: AppRecord; changed: boolean } {
   const current = (record.previewUrl || '').trim();
   const deprecated = current.startsWith('/builds/') || current.startsWith('/play/');
-  if (current && !deprecated && looksLikeImageAsset(current)) {
-    return { next: record, changed: false };
+  if (!current || deprecated || !looksLikeImageAsset(current)) {
+    if (!current) {
+      return { next: record, changed: false };
+    }
+    const next: AppRecord = { ...record };
+    delete (next as any).previewUrl;
+    return { next, changed: next.previewUrl !== record.previewUrl };
   }
-  const next: AppRecord = {
-    ...record,
-    previewUrl: fallbackPreviewPath(record.slug, record.id),
-  };
-  return { next, changed: true };
+  return { next: record, changed: false };
 }
 
 function sanitizeSegment(value: string): string {

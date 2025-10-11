@@ -10,7 +10,8 @@ import { getBuildDir } from '../paths.js';
 import { readApps, writeApps, type AppRecord, listEntitlements } from '../db.js';
 import { getConfig } from '../config.js';
 import { computeNextVersion } from '../lib/versioning.js';
-import { ensureListingPreview } from '../lib/preview.js';
+import { ensureListingPreview, saveListingPreviewFile } from '../lib/preview.js';
+import { writeArtifact } from '../utils/artifacts.js';
 
 function slugify(input: string): string {
   return input
@@ -21,7 +22,7 @@ function slugify(input: string): string {
     .slice(0, 80);
 }
 
-  interface PublishPayload {
+interface PublishPayload {
   id: string;
   title?: string;
   description?: string;
@@ -42,6 +43,21 @@ function slugify(input: string): string {
   };
   inlineCode: string;
   visibility?: string;
+  preview?: {
+    dataUrl?: string;
+  };
+}
+
+function parseDataUrl(input: string | undefined): { mimeType: string; buffer: Buffer } | null {
+  if (!input) return null;
+  const match = /^data:([^;]+);base64,(.+)$/i.exec(input.trim());
+  if (!match) return null;
+  try {
+    const buffer = Buffer.from(match[2], 'base64');
+    return { mimeType: match[1] || 'image/png', buffer };
+  } catch {
+    return null;
+  }
 }
 
   export default async function publishRoutes(app: FastifyInstance) {
@@ -65,10 +81,10 @@ function slugify(input: string): string {
     }
     body.author = body.author || { uid };
 
-    const apps = await readApps();
-    const owned = apps.filter(
-      (a) => a.author?.uid === uid || (a as any).ownerUid === uid,
-    );
+      const apps = await readApps();
+      const owned = apps.filter(
+        (a) => a.author?.uid === uid || (a as any).ownerUid === uid,
+      );
     // When updating, permit matching by id or slug (and tolerate numeric id)
     const idxOwned = appId
       ? owned.findIndex((a) => a.id === appId || a.slug === appId)
@@ -108,11 +124,13 @@ function slugify(input: string): string {
       const dir = getBuildDir(buildId);
       await fs.mkdir(dir, { recursive: true });
 
-      // Simple check for HTML file
-      if (body.inlineCode.trim().toLowerCase().startsWith('<!doctype html>')) {
-        await fs.writeFile(path.join(dir, 'index.html'), body.inlineCode, 'utf8');
-        // Create an empty app.js so the rest of the pipeline doesn't break
-        await fs.writeFile(path.join(dir, 'app.js'), '', 'utf8');
+      const isHtml = body.inlineCode.trim().toLowerCase().startsWith('<!doctype html>');
+      let indexHtml = '<!doctype html><html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /><style>html,body{margin:0;padding:0} body{overflow-x:hidden} #root{min-height:100vh}</style></head><body><div id="root"></div><script type="module" src="./app.js"></script></body></html>';
+      let appJs = '';
+
+      if (isHtml) {
+        indexHtml = body.inlineCode;
+        appJs = '';
       } else {
         const result = await esbuild.transform(body.inlineCode, {
           loader: 'tsx',
@@ -120,12 +138,36 @@ function slugify(input: string): string {
           jsx: 'automatic',
           jsxDev: process.env.NODE_ENV !== 'production',
         });
-        await fs.writeFile(path.join(dir, 'app.js'), result.code, 'utf8');
-        await fs.writeFile(
-          path.join(dir, 'index.html'),
-          '<!doctype html><div id="root"></div>',
-          'utf8',
-        );
+        appJs = result.code;
+      }
+
+      // Write a minimal build layout expected by downstream steps
+      const buildDir = path.join(dir, 'build');
+      await fs.mkdir(buildDir, { recursive: true });
+      await fs.writeFile(path.join(buildDir, 'index.html'), indexHtml, 'utf8');
+      await fs.writeFile(path.join(buildDir, 'app.js'), appJs, 'utf8');
+
+      // Also keep top-level copies for debugging/inspection
+      await fs.writeFile(path.join(dir, 'index.html'), indexHtml, 'utf8');
+      await fs.writeFile(path.join(dir, 'app.js'), appJs, 'utf8');
+
+      // Ensure minimal manifest so the web UI can read /builds/:id/build/manifest_v1.json even
+      // before background workers enrich artifacts. This prevents white screens.
+      try {
+        const manifest = {
+          id: buildId,
+          entry: 'app.js',
+          name: (body.title || '').trim() || String(buildId),
+          description: (body.description || '').trim() || '',
+          networkPolicy: 'NO_NET',
+          networkDomains: [],
+        };
+        const manifestJson = JSON.stringify(manifest, null, 2);
+        await fs.writeFile(path.join(buildDir, 'manifest_v1.json'), manifestJson, 'utf8');
+        // Keep artifact index in sync for tooling that relies on it
+        await writeArtifact(buildId, 'build/manifest_v1.json', manifestJson);
+      } catch (err) {
+        req.log?.warn?.({ err, buildId }, 'publish:manifest_write_failed');
       }
     } catch (err) {
       req.log.error({ err }, 'publish:build_failed');
@@ -167,6 +209,22 @@ function slugify(input: string): string {
         return out as any;
       };
 
+      let payloadPreviewUrl: string | undefined;
+      try {
+        const parsedPreview = parseDataUrl(body.preview?.dataUrl);
+        if (parsedPreview) {
+          payloadPreviewUrl = await saveListingPreviewFile({
+            listingId: String(listingId),
+            slug,
+            buffer: parsedPreview.buffer,
+            mimeType: parsedPreview.mimeType,
+            previousUrl: existing?.previewUrl,
+          });
+        }
+      } catch (err) {
+        req.log.warn({ err, slug }, 'publish_preview_store_failed');
+      }
+
       if (existing) {
         const base: AppRecord = {
           ...existing,
@@ -189,6 +247,7 @@ function slugify(input: string): string {
           archivedVersions: existing.archivedVersions,
           pendingBuildId: buildId,
           pendingVersion: version,
+          previewUrl: payloadPreviewUrl ?? existing.previewUrl,
         };
         const provided = sanitizeTranslations(body.translations);
         if (Object.keys(provided).length) {
@@ -224,6 +283,7 @@ function slugify(input: string): string {
           domainsSeen: [],
           version,
           archivedVersions,
+          previewUrl: payloadPreviewUrl,
         };
         const provided = sanitizeTranslations(body.translations);
         if (Object.keys(provided).length) (base as any).translations = provided as any;

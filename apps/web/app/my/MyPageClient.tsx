@@ -580,6 +580,7 @@ export default function MyProjectsPage() {
               const likeDisplay = it.likesCount ?? 0;
               const isNew = it.createdAt && Date.now() - it.createdAt < 1000 * 60 * 60 * 24 * 7;
               const img = imgSrc(it);
+              const hasPreview = Boolean(img);
 
               return (
                 <article
@@ -588,14 +589,17 @@ export default function MyProjectsPage() {
                 >
                   <div className="relative">
                     <Link href={{ pathname: '/app', query: { slug: it.slug } }} title={it.title}>
-                      <img
-                        src={img}
-                        alt={it.title}
-                        className="w-full aspect-video object-cover"
-                        onError={(e) => {
-                          e.currentTarget.src = `/assets/app-default.svg`;
-                        }}
-                      />
+                      {hasPreview ? (
+                        <img
+                          src={img}
+                          alt={it.title}
+                          className="w-full aspect-video object-cover"
+                        />
+                      ) : (
+                        <div className="w-full aspect-video bg-slate-100 flex items-center justify-center text-slate-500 text-xs font-medium">
+                          Bez grafike
+                        </div>
+                      )}
                     </Link>
 
                     {/* Badges */}

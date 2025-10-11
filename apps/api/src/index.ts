@@ -12,7 +12,9 @@ import fastifyStatic from '@fastify/static';
 import multipart from '@fastify/multipart';
 import rawBody from 'fastify-raw-body';
 import fs from 'node:fs';
+import fsSync from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { BUNDLE_ROOT, PREVIEW_ROOT } from './paths.js';
 import './shims/registerSwcHelpers.js';
 import { getConfig, ALLOWED_ORIGINS } from './config.js';
@@ -50,6 +52,33 @@ import { ensureDbInitialized } from './db.js';
 export let app: FastifyInstance;
 
 export async function createServer() {
+  // Ensure UI stub exists for builder in both dev and dist deployments
+  try {
+    const runtimeDir = path.dirname(fileURLToPath(import.meta.url));
+    const builderDir = path.join(runtimeDir, 'builder');
+    const dest = path.join(builderDir, 'virtual-ui.tsx');
+    if (!fsSync.existsSync(dest)) {
+      fsSync.mkdirSync(builderDir, { recursive: true });
+      const candidates = [
+        path.join(runtimeDir, '..', 'src', 'builder', 'virtual-ui.tsx'),
+        path.join(process.cwd(), 'apps', 'api', 'src', 'builder', 'virtual-ui.tsx'),
+      ];
+      let copied = false;
+      for (const c of candidates) {
+        try {
+          if (fsSync.existsSync(c)) {
+            fsSync.copyFileSync(c, dest);
+            copied = true;
+            break;
+          }
+        } catch {}
+      }
+      if (!copied) {
+        const stub = `import * as React from 'react';\nexport function Card(p:any){return React.createElement('div',{...p, className: (p.className||'')})}\nexport function CardHeader(p:any){return React.createElement('div',{...p, className: 'p-4 ' + (p.className||'')})}\nexport function CardTitle(p:any){return React.createElement('h3',{...p, className: 'text-lg font-semibold ' + (p.className||'')})}\nexport function CardContent(p:any){return React.createElement('div',{...p, className: 'p-4 ' + (p.className||'')})}\nexport function Button(p:any){return React.createElement('button',{...p, className: (p.className||'')})}\nexport function Input(p:any){return React.createElement('input',{...p, className: (p.className||'')})}\nexport function Label(p:any){return React.createElement('label',{...p, className: (p.className||'')})}\nexport function Textarea(p:any){return React.createElement('textarea',{...p, className: (p.className||'')})}\nexport function Slider(p:any){return React.createElement('input',{type:'range',...p})}\n`;
+        fsSync.writeFileSync(dest, stub, 'utf8');
+      }
+    }
+  } catch {}
   validateEnv();
   const config = getConfig();
   await ensureDbInitialized();
@@ -91,6 +120,55 @@ export async function createServer() {
   });
   await app.register(helmet, { contentSecurityPolicy: false, frameguard: false });
 
+  // Allow being mounted behind "/api" prefix (prod) by stripping it early
+  app.addHook('onRequest', (req, _reply, done) => {
+    try {
+      const raw = (req.raw?.url || req.url || '') as string;
+      // 1) Support API behind /api prefix
+      if (raw === '/api' || raw === '/api/') {
+        (req as any).url = '/';
+        if (req.raw) (req.raw as any).url = '/';
+      } else if (raw.startsWith('/api/')) {
+        const stripped = raw.slice(4) || '/';
+        (req as any).url = stripped;
+        if (req.raw) (req.raw as any).url = stripped;
+      }
+
+      // 2) Best-effort: auto-create minimal manifest if missing to avoid 404 white screens
+      //    Pattern: /builds/:id/build/manifest_v1.json
+      const urlForCheck = ((req as any).url || raw) as string;
+      const m = /^\/builds\/([^\/]+)\/build\/manifest_v1\.json(?:[?#].*)?$/.exec(urlForCheck);
+      if (m && m[1]) {
+        try {
+          const buildId = decodeURIComponent(m[1]);
+          const cfg = getConfig();
+          const buildDir = path.join(cfg.BUNDLE_STORAGE_PATH, 'builds', buildId, 'build');
+          const manPath = path.join(buildDir, 'manifest_v1.json');
+          try {
+            fs.accessSync(manPath);
+          } catch {
+            // Create minimal manifest if app.js exists
+            try {
+              const appJs = path.join(buildDir, 'app.js');
+              fs.accessSync(appJs);
+              fs.mkdirSync(buildDir, { recursive: true });
+              const manifest = {
+                id: buildId,
+                entry: 'app.js',
+                name: buildId,
+                description: '',
+                networkPolicy: 'NO_NET',
+                networkDomains: [],
+              };
+              fs.writeFileSync(manPath, JSON.stringify(manifest, null, 2), 'utf8');
+            } catch {}
+          }
+        } catch {}
+      }
+    } catch {}
+    done();
+  });
+
   const staticAllowedOrigins = new Set([
     ...resolvedAllowedOrigins,
     'https://thesara.space',
@@ -102,7 +180,12 @@ export async function createServer() {
   app.addHook('onSend', (req, reply, _payload, done) => {
     const url = req.url || req.raw?.url || '';
 
-    if (url.startsWith('/assets') || url.startsWith('/builds') || url.startsWith('/avatar')) {
+    if (
+      url.startsWith('/assets') ||
+      url.startsWith('/builds') ||
+      url.startsWith('/avatar') ||
+      url.startsWith('/uploads')
+    ) {
       reply.header('Cross-Origin-Resource-Policy', 'cross-origin');
 
       const origin = req.headers.origin as string | undefined;
@@ -416,9 +499,7 @@ export async function createServer() {
       reply.send({ ok: true, ts: Date.now() }),
   });
 
-  app.all('/api/*', (_req: FastifyRequest, reply: FastifyReply) => {
-    reply.code(404).send({ error: 'Use frontend proxy /api/*, not API host with /api prefix' });
-  });
+  // Note: legacy /api/* handler removed; supported via onRequest prefix-strip
 
   app.setNotFoundHandler((req: FastifyRequest, reply: FastifyReply) => {
     const diagDir = path.join(process.cwd(), '.diag');

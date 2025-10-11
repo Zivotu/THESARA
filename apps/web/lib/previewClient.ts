@@ -183,54 +183,64 @@ async function renderOverlay(blob: Blob, text: string): Promise<Blob> {
   });
 }
 
-export async function uploadPresetPreview(slug: string, presetPath: string, opts: { overlayText?: string } = {}) {
-
+async function preparePresetFile(presetPath: string, overlayText?: string): Promise<File> {
   const normalized = ensureLeadingSlash(presetPath);
-
   const presetUrl = normalized;
-
   const res = await fetch(presetUrl, { cache: 'no-store' });
-
   if (!res.ok) {
-
     throw new PreviewUploadError(res.status, 'Preset image is not available', 'preset_missing');
-
   }
-
   const blob = await res.blob();
-
   let processedBlob: Blob = blob;
-
-  const overlayText = opts.overlayText?.trim();
-
-  if (overlayText) {
-
+  const trimmedOverlay = overlayText?.trim();
+  if (trimmedOverlay) {
     try {
-
-      processedBlob = await renderOverlay(blob, overlayText);
-
+      processedBlob = await renderOverlay(blob, trimmedOverlay);
     } catch (err) {
-
       console.warn('preset-overlay-failed', err);
-
       processedBlob = blob;
-
     }
-
   }
-
   const name = normalized.split('/').pop() || 'preset.png';
-
   const mimeType =
     processedBlob.type && processedBlob.type !== 'application/octet-stream'
       ? processedBlob.type
       : 'image/png';
+  return new File([processedBlob], name, { type: mimeType });
+}
 
-  const file = new File([processedBlob], name, { type: mimeType });
+async function applyPresetPreviewPath(slug: string, presetPath: string) {
+  const headers = await buildAuthHeaders();
+  headers['Content-Type'] = 'application/json';
+  const res = await fetch(buildPreviewUrl(slug), {
+    method: 'POST',
+    credentials: 'include',
+    headers,
+    body: JSON.stringify({ path: presetPath }),
+  });
+  if (!res.ok) {
+    let message = `Failed to apply preset preview (${res.status})`;
+    try {
+      const j = await res.clone().json();
+      message = j?.message || message;
+    } catch {}
+    throw new PreviewUploadError(res.status, message);
+  }
+  return res.json().catch(() => ({}));
+}
 
+export async function uploadPresetPreview(slug: string, presetPath: string, opts: { overlayText?: string } = {}) {
+  const trimmed = (opts.overlayText || '').trim();
+  if (!trimmed) {
+    // No overlay requested: avoid duplicating assets by referencing preset path directly
+    return applyPresetPreviewPath(slug, ensureLeadingSlash(presetPath));
+  }
+  const file = await preparePresetFile(presetPath, trimmed);
   return uploadPreviewFile(slug, file);
+}
 
-
+export async function createPresetPreviewFile(presetPath: string, opts: { overlayText?: string } = {}) {
+  return preparePresetFile(presetPath, opts.overlayText);
 }
 
 export const PREVIEW_PRESET_PATHS = [

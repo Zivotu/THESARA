@@ -80,6 +80,7 @@ const AppCard = React.memo(
     const subscribedLabel = locale === 'hr' ? 'Pretplaćeno' : 'Subscribed';
 
     const imgSrc = resolvePreviewUrl(item.previewUrl);
+    const hasPreview = Boolean(imgSrc);
     const newBadge = Date.now() - item.createdAt < 1000 * 60 * 60 * 24 * 7;
     const likedCount = item.likesCount || 0;
     const isHot = likedCount > 100;
@@ -187,14 +188,20 @@ const AppCard = React.memo(
           aria-label={`Open details for ${item.title}`}
         >
           <div className="relative flex-shrink-0 w-32 h-32 rounded-xl overflow-hidden">
-            <Image
-              src={imgSrc}
-              alt={item.title}
-              fill
-              style={{ color: 'transparent' }}
-              className="object-cover transition-transform duration-300 group-hover:scale-105"
-              {...imgProps}
-            />
+            {hasPreview ? (
+              <Image
+                src={imgSrc}
+                alt={item.title}
+                fill
+                style={{ color: 'transparent' }}
+                className="object-cover transition-transform duration-300 group-hover:scale-105"
+                {...imgProps}
+              />
+            ) : (
+              <div className="w-full h-full bg-slate-100 flex items-center justify-center text-slate-500 text-xs font-medium">
+                Bez grafike
+              </div>
+            )}
             {newBadge && (
               <span className="absolute top-2 left-2 rounded-full bg-emerald-500 text-white text-xs font-medium px-2 py-0.5">NEW</span>
             )}
@@ -298,17 +305,20 @@ const AppCard = React.memo(
         aria-label={`Open details for ${item.title}`}
       >
         <div className="relative aspect-video">
-          <Image
-            src={imgSrc}
-            alt={item.title}
-            fill
-            style={{ color: 'transparent' }}
-            className="object-cover transition-transform duration-300 group-hover:scale-105"
-            {...imgProps}
-            onError={(e) => {
-              (e.currentTarget as HTMLImageElement).src = `/assets/app-default.svg`;
-            }}
-          />
+          {hasPreview ? (
+            <Image
+              src={imgSrc}
+              alt={item.title}
+              fill
+              style={{ color: 'transparent' }}
+              className="object-cover transition-transform duration-300 group-hover:scale-105"
+              {...imgProps}
+            />
+          ) : (
+            <div className="w-full h-full bg-slate-100 flex items-center justify-center text-slate-500 text-xs font-medium">
+              Bez grafike
+            </div>
+          )}
           {/* Price/Free badge */}
           <div className="absolute top-2 left-2">
             <span className="rounded-full bg-gray-900/90 text-white text-xs font-semibold px-2 py-0.5 shadow">

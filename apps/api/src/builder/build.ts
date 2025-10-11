@@ -9,6 +9,7 @@ import { parse } from "@babel/parser";
 import traverse from "@babel/traverse";
 import * as t from "@babel/types";
 import { cdnImportPlugin, type Opts as CdnOpts } from "./cdnPlugin.js";
+import fs from "node:fs";
 import { buildTailwindCSS } from "./tailwind.js";
 
 const NAME_SHIM = 'var __name = globalThis.__name || (globalThis.__name = (fn,name)=>{try{Object.defineProperty(fn,"name",{value:name,configurable:true});}catch{}return fn;});';
@@ -230,13 +231,25 @@ export async function buildFromReact(
     }
 
     const virtualEntry = makeVirtualEntry("virtual:user-app");
+    // Resolve robust root for virtual-ui.tsx in dev and dist
+    let pluginRoot = DIRNAME; // default to runtime dir (dist)
+    try {
+      const distStub = path.join(DIRNAME, "builder", "virtual-ui.tsx");
+      const srcStub = path.join(DIRNAME, "..", "src", "builder", "virtual-ui.tsx");
+      if (fs.existsSync(distStub)) {
+        pluginRoot = DIRNAME;
+      } else if (fs.existsSync(srcStub)) {
+        pluginRoot = path.join(DIRNAME, "..", "src");
+      }
+    } catch {}
+
     const result = await esbuild.build({
       bundle: true,
       format: "esm",
       write: false,
       stdin: { contents: virtualEntry, loader: "ts" },
       plugins: [
-                cdnImportPlugin({ ...opts, rootDir: path.join(DIRNAME, ".."), allowAny: true }),
+        cdnImportPlugin({ ...opts, rootDir: pluginRoot, allowAny: true }),
         userAppPlugin(),
       ],
       define: { __USER_CODE__: JSON.stringify(userCode) },

@@ -1,5 +1,6 @@
 import EventEmitter from 'node:events';
 import fs from 'node:fs/promises';
+import fssync from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as esbuild from 'esbuild';
@@ -142,6 +143,18 @@ async function runJob(job: Job): Promise<void> {
             })().catch((err) => console.error('bootstrap_failed', err));
           `;
 
+          // Resolve root directory for UI stubs (works in dev and in dist)
+          let pluginRoot = __dirname;
+          try {
+            const distCandidate = fssync.existsSync(path.join(__dirname, 'builder', 'virtual-ui.tsx'));
+            const srcCandidate = fssync.existsSync(path.join(__dirname, '..', 'src', 'builder', 'virtual-ui.tsx'));
+            if (distCandidate) {
+              pluginRoot = __dirname;
+            } else if (srcCandidate) {
+              pluginRoot = path.join(__dirname, '..', 'src');
+            }
+          } catch {}
+
           await esbuild.build({
             stdin: {
               contents: virtualEntry,
@@ -159,7 +172,7 @@ async function runJob(job: Job): Promise<void> {
             plugins: [
               cdnImportPlugin({
                 cacheDir: dir,
-                rootDir: __dirname,
+                rootDir: pluginRoot,
                 allow: CDN_ALLOW,
                 pin: CDN_PIN,
                 external: !!EXTERNAL_HTTP_ESM,

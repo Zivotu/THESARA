@@ -390,19 +390,26 @@ return (
           <tbody>
             {filtered.map((it) => {
               const imgSrc = resolvePreviewUrl(it.previewUrl);
+              const hasPreview = Boolean(imgSrc);
               return (
                 <tr key={it.id} className="border-t">
                   <td className="p-2">{it.id}</td>
                   <td className="p-2">
-                    <Image
-                      src={imgSrc}
-                      alt="preview"
-                      width={40}
-                      height={40}
-                      unoptimized
-                      style={{ color: 'transparent' }}
-                      className="w-10 h-10 object-cover"
-                    />
+                    {hasPreview ? (
+                      <Image
+                        src={imgSrc}
+                        alt="preview"
+                        width={40}
+                        height={40}
+                        unoptimized
+                        style={{ color: 'transparent' }}
+                        className="w-10 h-10 object-cover rounded"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded bg-slate-100 text-slate-500 text-[10px] font-medium grid place-items-center">
+                        Bez
+                      </div>
+                    )}
                   </td>
                   <td className="p-2">{it.title}</td>
                   <td className="p-2">{it.ownerEmail || '-'}</td>

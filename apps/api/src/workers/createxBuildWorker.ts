@@ -101,8 +101,9 @@ export function startCreatexBuildWorker(): BuildWorkerHandle {
         await updateBuild(buildId, { state: 'build', progress: 0 });
         logState(buildId, 'build');
         await runBuildProcess(buildId);
-        await updateBuild(buildId, { state: 'published', progress: 100 });
-        logState(buildId, 'published');
+        // Hand off to review queue; admin can approve to move to published
+        await updateBuild(buildId, { state: 'pending_review', progress: 100 });
+        logState(buildId, 'pending_review');
       } catch (err: any) {
         console.error({ buildId, err }, 'build:error');
         await updateBuild(buildId, {

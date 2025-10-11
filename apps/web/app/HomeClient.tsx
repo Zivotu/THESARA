@@ -114,12 +114,19 @@ function DetailsModal({ open, item, onClose }: { open: boolean; item: Listing | 
   if (!open || !item) return null;
   const data = (full || item) as Listing;
   const imgSrc = resolvePreviewUrl(data.previewUrl);
+  const hasPreview = Boolean(imgSrc);
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <div className="relative z-10 w-full max-w-2xl rounded-2xl bg-white shadow-2xl border border-gray-200 overflow-hidden animate-slideUp">
         <div className="relative h-56 bg-gray-50">
-          <Image src={imgSrc} alt={data.title} fill style={{ color: 'transparent' }} className="object-cover" />
+          {hasPreview ? (
+            <Image src={imgSrc} alt={data.title} fill style={{ color: 'transparent' }} className="object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-gray-500 text-sm font-medium">
+              Bez grafike
+            </div>
+          )}
           <button onClick={onClose} className="absolute top-3 right-3 p-2 rounded-full bg-white/90 hover:bg-white shadow" aria-label="Close">
             <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -457,14 +464,20 @@ export default function HomeClient({ initialItems = [] }: HomeClientProps) {
                 style={{ transform: `translateX(-${carouselIndex * slideSize}px)` }}
               >
                 {[...topLiked, ...topLiked].map((it, idx) => {
-                  const hasPreview = !!it.previewUrl;
-                  const img = hasPreview ? resolvePreviewUrl(it.previewUrl) : `/assets/app-default.svg`;
+                  const img = resolvePreviewUrl(it.previewUrl);
+                  const hasPreview = Boolean(img);
                   const imgProps = idx === 0 ? { priority: true, loading: 'eager' as const } : {};
                   return (
                     <div key={`${it.id}-${idx}`} data-carousel-item ref={idx === 0 ? firstSlideRef : undefined} className="w-[280px] flex-none">
                       <div onClick={() => router.push(`/app?slug=${encodeURIComponent(it.slug)}`)} className="group cursor-pointer rounded-2xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition overflow-hidden">
                         <div className="relative h-40">
-                          <Image src={img} alt={it.title} fill style={{ color: 'transparent' }} className="object-cover transition-transform duration-300 group-hover:scale-105" onError={(e) => { (e.currentTarget as HTMLImageElement).src = `/assets/app-default.svg`; }} {...imgProps} />
+                          {hasPreview ? (
+                            <Image src={img} alt={it.title} fill style={{ color: 'transparent' }} className="object-cover transition-transform duration-300 group-hover:scale-105" {...imgProps} />
+                          ) : (
+                            <div className="w-full h-full bg-slate-100 text-slate-500 text-xs font-medium grid place-items-center">
+                              Bez grafike
+                            </div>
+                          )}
                           <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-3">
                             <span className="text-white text-base font-medium line-clamp-1">{it.title}</span>
                           </div>

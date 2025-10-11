@@ -219,17 +219,30 @@ export async function getBuildArtifacts(id: string): Promise<BuildArtifacts> {
 }
 
 export async function publishBundle(id: string): Promise<void> {
-  const src = path.join(BUILDS_ROOT, id, 'bundle');
+  // Prefer 'bundle/' but fall back to 'build/' in local/dev pipeline
+  const baseDir = path.join(BUILDS_ROOT, id);
+  let src = path.join(baseDir, 'bundle');
   if (!(await dirExists(src))) {
-    throw new AppError('BUNDLE_SRC_NOT_FOUND');
+    const alt = path.join(baseDir, 'build');
+    if (await dirExists(alt)) {
+      src = alt;
+    } else {
+      throw new AppError('BUNDLE_SRC_NOT_FOUND');
+    }
   }
 
-  // verify essential files exist before publishing
+  // verify essential files exist before publishing; if missing try to hydrate from root copies
   const required = ['index.html', 'app.js'];
   for (const file of required) {
-    try {
-      await fs.access(path.join(src, file));
-    } catch {
+    const target = path.join(src, file);
+    const rootCopy = path.join(baseDir, file);
+    if (!(await fileExists(target))) {
+      if (await fileExists(rootCopy)) {
+        await fs.mkdir(path.dirname(target), { recursive: true });
+        await fs.copyFile(rootCopy, target);
+      }
+    }
+    if (!(await fileExists(target))) {
       throw new AppError(
         'BUILD_REQUIRED_FILE_MISSING',
         `Missing required file(s): ${file}`,
@@ -237,7 +250,7 @@ export async function publishBundle(id: string): Promise<void> {
     }
   }
 
-  // In local dev mode, skip cloud upload and keep local directory.
+  // In local dev mode or non-firebase storage, skip cloud upload and keep local directory.
   // Review download endpoint can stream a tar.gz from this local folder.
   const cfg0 = getConfig();
   const KEEP_LOCAL_BUNDLE = process.env.KEEP_LOCAL_BUNDLE === 'true';

@@ -148,10 +148,17 @@ export default function MyCreatorsPage() {
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {apps.slice(0, 6).map((a) => {
                       const img = resolvePreviewUrl(a.previewUrl);
+                      const hasPreview = Boolean(img);
                       return (
                         <Link key={a.id} href={`/app/${a.slug}`} className="group block">
                           <div className="relative aspect-video rounded-lg overflow-hidden border">
-                            <Image src={img} alt={a.title} fill className="object-cover group-hover:opacity-90" style={{ color: 'transparent' }} />
+                            {hasPreview ? (
+                              <Image src={img} alt={a.title} fill className="object-cover group-hover:opacity-90" style={{ color: 'transparent' }} />
+                            ) : (
+                              <div className="w-full h-full bg-slate-100 text-slate-500 text-[11px] font-medium grid place-items-center">
+                                Bez grafike
+                              </div>
+                            )}
                           </div>
                           <div className="mt-1 text-sm text-gray-800 truncate" title={a.title}>{a.title}</div>
                         </Link>

@@ -353,6 +353,7 @@ function AppDetailClient() {
   const [customPreview, setCustomPreview] = useState<{ file: File; dataUrl: string } | null>(null);
   const [previewError, setPreviewError] = useState('');
   const [previewApplied, setPreviewApplied] = useState(false);
+  const [previewDisplayFailed, setPreviewDisplayFailed] = useState(false);
   const relativeCreated = useRelativeTime(item?.createdAt ?? null, timeSince);
 
   const readFileAsDataUrl = useCallback(async (file: File) => {
@@ -465,6 +466,10 @@ useEffect(() => {
     [overlayMaxChars, presetOverlay, previewChoice]
   );
   const presetOverlayLabel = previewChoice === 'preset' ? previewOverlayText : '';
+
+  useEffect(() => {
+    setPreviewDisplayFailed(false);
+  }, [item?.previewUrl, imgVersion]);
 
   const applySelectedPreview = useCallback(async () => {
     if (!item || !canEdit || previewBusy) return;
@@ -645,6 +650,7 @@ useEffect(() => {
         const it: Listing | undefined = json.item;
         if (it) {
           setItem(it);
+          setPreviewApplied(Boolean(it.previewUrl));
           setTitle(it.title ?? '');
           setDescription(it.description ?? '');
           try {
@@ -691,6 +697,24 @@ useEffect(() => {
     }
     return resolved;
   }, [canEdit, item?.status, item?.previewUrl, imgVersion]);
+
+  const hasUnsavedPreview = useMemo(() => {
+    if (!canEdit) return false;
+    if (previewChoice === 'custom') return !!customPreview;
+    if (previewChoice === 'preset') return !previewApplied;
+    return false;
+  }, [canEdit, customPreview, previewChoice, previewApplied]);
+
+  const useEditorPreview = hasUnsavedPreview || (!imgSrc && canEdit);
+  const activePreviewSrc = useEditorPreview ? previewDisplayUrl : imgSrc;
+  const activeOverlayLabel =
+    useEditorPreview && previewChoice === 'preset' ? presetOverlayLabel : '';
+
+  useEffect(() => {
+    if (useEditorPreview) {
+      setPreviewDisplayFailed(false);
+    }
+  }, [useEditorPreview]);
 
   async function loadSessions() {
     setRefreshingSessions(true);
@@ -1275,14 +1299,23 @@ useEffect(() => {
           <div className="space-y-4">
             <div className="bg-white rounded-2xl border border-gray-200 shadow-lg overflow-hidden">
               <div className="relative">
-                <img
-                  src={imgSrc}
-                  alt={item.title}
-                  className="w-full aspect-video object-cover"
-                                    onError={(e) => {
-                    e.currentTarget.src = `/assets/app-default.svg`;
-                  }}
-                />
+                {activePreviewSrc && !previewDisplayFailed ? (
+                  <img
+                    src={activePreviewSrc}
+                    alt={item.title}
+                    className="w-full aspect-video object-cover"
+                    onError={useEditorPreview ? undefined : () => setPreviewDisplayFailed(true)}
+                  />
+                ) : (
+                  <div className="w-full aspect-video bg-slate-100 flex items-center justify-center text-slate-500 text-sm font-medium">
+                    {tApp('previewGraphicHint')}
+                  </div>
+                )}
+                {activeOverlayLabel && (
+                  <div className="absolute inset-x-0 bottom-0 bg-slate-900/80 text-white text-sm font-semibold text-center leading-snug py-2 px-4 break-words">
+                    {activeOverlayLabel}
+                  </div>
+                )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 hover:opacity-100 transition-opacity duration-300 flex items-end justify-center pb-8 z-10">
                   {user ? (
                     <a
@@ -1396,18 +1429,22 @@ useEffect(() => {
                       </span>
                     </div>
                     <div className="rounded-xl border border-gray-200 overflow-hidden">
-                      <div className="relative aspect-video bg-gray-100">
-                        <img
-                          src={previewDisplayUrl}
-                          alt="Preview choice"
-                          className="w-full h-full object-cover"
-                        />
-                        {previewChoice === 'preset' && presetOverlayLabel && (
-                          <div className="absolute inset-x-0 bottom-0 bg-slate-900/80 text-white text-sm font-semibold text-center leading-snug py-2 px-4 break-words">
-                            {presetOverlayLabel}
-                          </div>
-                        )}
-                      </div>
+                  {previewChoice === 'custom' && customPreview?.dataUrl ? (
+                    <div className="relative aspect-video bg-gray-100">
+                      <img
+                        src={customPreview.dataUrl}
+                        alt="Custom preview"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  ) : (
+                    <div className="relative aspect-video bg-gray-100 bg-[radial-gradient(circle_at_center,_rgba(15,23,42,0.12),_transparent_55%)] border border-dashed border-slate-300 text-slate-500 flex flex-col items-center justify-center text-xs uppercase tracking-wide">
+                      <span className="font-semibold">{tApp('previewGraphicHint')}</span>
+                      <span className="mt-1 text-[11px] text-slate-400">
+                        {tApp('chooseCustomGraphic')}
+                      </span>
+                    </div>
+                  )}
                     </div>
                     <div className="flex items-center gap-3">
                       <button
@@ -1423,7 +1460,7 @@ useEffect(() => {
                         {previewBusy ? tApp('savingGraphic') : tApp('saveGraphic')}
                       </button>
                       {!previewBusy && previewApplied && !previewError && (
-                        <span className="text-xs text-emerald-600">{tApp('previewUploadSuccess')}</span>
+                      <span className="text-xs text-emerald-600">{tApp('previewUploadSuccess')}</span>
                       )}
                       {previewBusy && (
                         <span className="text-xs text-gray-500">{tApp('previewUploading')}</span>

@@ -9,7 +9,7 @@ import { getConnectStatus } from '../billing/service.js';
 import { getBuildDir } from '../paths.js';
 import { getBucket } from '../storage.js';
 import { ensureListingTranslations } from '../lib/translate.js';
-import { ensureListingPreview, saveListingPreviewFile } from '../lib/preview.js';
+import { ensureListingPreview, saveListingPreviewFile, removeExistingPreviewFile } from '../lib/preview.js';
 
 const SUPPORTED_LOCALES = ['en', 'hr', 'de'] as const;
 type SupportedLocale = typeof SUPPORTED_LOCALES[number];
@@ -153,6 +153,30 @@ export default async function listingsRoutes(app: FastifyInstance) {
 
     try {
       const ct = (req.headers['content-type'] || '').toString();
+      // Support preset application via JSON body { path: '/preview-presets/..' | '/assets/..' }
+      if (/^application\/json/i.test(ct)) {
+        const body = (req.body || {}) as any;
+        const rawPath = (body?.path || '').toString().trim();
+        const normalized = rawPath.startsWith('/') ? rawPath : `/${rawPath}`;
+        const allowed = normalized.startsWith('/preview-presets/') || normalized.startsWith('/assets/');
+        if (!allowed) {
+          return reply.code(400).send({ ok: false, error: 'invalid_preview_path' });
+        }
+        // Clean up prior uploaded file if it lived under /uploads
+        try {
+          await removeExistingPreviewFile(item.previewUrl);
+        } catch {}
+        const next: AppRecord = {
+          ...item,
+          previewUrl: normalized,
+          updatedAt: Date.now(),
+        };
+        apps[idx] = next;
+        await writeApps(apps);
+        return reply.send({ ok: true, previewUrl: normalized });
+      }
+
+      // Default: multipart upload of a custom file
       if (!/^multipart\/form-data/i.test(ct)) {
         return reply.code(400).send({ ok: false, error: 'preview_upload_required' });
       }

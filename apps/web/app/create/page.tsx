@@ -16,6 +16,7 @@ import {
   PreviewUploadError,
   uploadPreviewFile,
   uploadPresetPreview,
+  createPresetPreviewFile,
 } from '@/lib/previewClient';
 
 // Temporary draft type for building manifest locally
@@ -699,6 +700,21 @@ export default function CreatePage() {
         translations.hr = { ...(norm(trHr.title) ? { title: norm(trHr.title) } : {}), ...(norm(trHr.description) ? { description: norm(trHr.description) } : {}) };
       }
 
+      let previewAttachment: { dataUrl: string } | null = null;
+      try {
+        if (previewChoice === 'custom' && customPreview?.dataUrl) {
+          previewAttachment = { dataUrl: customPreview.dataUrl };
+        } else {
+          const file = await createPresetPreviewFile(selectedPreset, {
+            overlayText: previewChoice === 'preset' ? previewOverlayText || undefined : undefined,
+          });
+          const dataUrl = await readFileAsDataUrl(file);
+          previewAttachment = { dataUrl };
+        }
+      } catch {
+        // Ignore preview prep failures; publish will fall back to default later
+      }
+
       const payload = {
         id: appId,
         title: manifest.name,
@@ -720,6 +736,7 @@ export default function CreatePage() {
         },
         inlineCode: code,
         visibility: 'public',
+        ...(previewAttachment ? { preview: previewAttachment } : {}),
       };
       try {
         const json = await apiAuthedPost<{
