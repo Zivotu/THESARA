@@ -2,7 +2,6 @@
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import * as esbuild from 'esbuild';
 import { isJobActive } from '../buildQueue.js';
 import { enqueueCreatexBuild } from '../workers/createxBuildWorker.js';
 import { notifyAdmins } from '../notifier.js';
@@ -12,6 +11,7 @@ import { getConfig } from '../config.js';
 import { computeNextVersion } from '../lib/versioning.js';
 import { ensureListingPreview, saveListingPreviewFile } from '../lib/preview.js';
 import { writeArtifact } from '../utils/artifacts.js';
+import { bundleInlineApp } from '../lib/bundleInlineApp.js';
 
 function slugify(input: string): string {
   return input
@@ -132,13 +132,12 @@ function parseDataUrl(input: string | undefined): { mimeType: string; buffer: Bu
         indexHtml = body.inlineCode;
         appJs = '';
       } else {
-        const result = await esbuild.transform(body.inlineCode, {
-          loader: 'tsx',
-          format: 'esm',
-          jsx: 'automatic',
+        const cfg = getConfig();
+        appJs = await bundleInlineApp(body.inlineCode, {
+          cacheDir: cfg.BUNDLE_STORAGE_PATH,
+          allowAny: true,
           jsxDev: process.env.NODE_ENV !== 'production',
         });
-        appJs = result.code;
       }
 
       // Write a minimal build layout expected by downstream steps
