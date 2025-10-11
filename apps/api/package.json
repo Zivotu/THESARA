@@ -2,14 +2,14 @@
   "name": "@loopyway/api",
   "private": true,
   "version": "0.0.3",
-  "type": "module",
-  "main": "dist/server.mjs",
+  "type": "commonjs",
+  "main": "dist/server.cjs",
   "scripts": {
     "dev": "dotenv tsx watch src/index.ts",
     "dev:worker": "dotenv tsx watch src/localdev/worker.run.ts",
     "build": "tsup --config tsup.config.ts",
     "build:bundle": "tsup --config tsup.config.ts",
-    "start": "node dist/server.mjs",
+    "start": "node dist/server.cjs",
     "migrate": "tsx src/migrate.ts",
     "check:bundle": "node -e \"import('file://'+process.cwd()+'/dist/server.mjs').then(()=>console.log('OK')).catch(e=>{console.error(e);process.exit(1)})\""
   },

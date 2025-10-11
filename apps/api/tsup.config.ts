@@ -16,7 +16,7 @@ export default defineConfig({
   minify: false,
   outDir: 'dist',
   outExtension() {
-    return { js: '.js' };
+    return { js: '.cjs' };
   },
   noExternal: [
     /^(?:@loopyway\/entitlements)(?:$|\/)/,
