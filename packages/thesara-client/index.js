@@ -1,4 +1,23 @@
 
+function assertValidStorageInterface(storage) {
+  if (!storage || typeof storage !== 'object') {
+    throw new Error('Thesara storage is not available on window.thesara.storage.');
+  }
+
+  const requiredMethods = ['getItem', 'setItem', 'removeItem'];
+  const missingMethods = requiredMethods.filter(
+    (method) => typeof storage[method] !== 'function'
+  );
+
+  if (missingMethods.length > 0) {
+    throw new Error(
+      `Thesara storage is missing required methods: ${missingMethods.join(', ')}`
+    );
+  }
+
+  return storage;
+}
+
 function createStorageClient({ authToken, appId, apiBaseUrl = '/api' }) {
   const headers = {
     'Authorization': `Bearer ${authToken}`,
@@ -57,6 +76,15 @@ function createMockStorageClient() {
 }
 
 function initializeThesara() {
+  const injectedStorage = window.thesara?.storage;
+  if (injectedStorage) {
+    try {
+      return Promise.resolve(assertValidStorageInterface(injectedStorage));
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  }
+
   return new Promise((resolve, reject) => {
     // If not in an iframe, resolve with a client for standalone development.
     if (window.self === window.top) {
@@ -70,16 +98,21 @@ function initializeThesara() {
     }
 
     const timeout = setTimeout(() => {
+      cleanup();
       reject(new Error('Thesara host did not respond in time.'));
     }, 5000);
 
     function handleMessage(event) {
       if (event.data && event.data.type === 'THESARA_INIT') {
-        clearTimeout(timeout);
-        window.removeEventListener('message', handleMessage);
+        cleanup();
         const storageClient = createStorageClient(event.data.payload);
         resolve(storageClient);
       }
+    }
+
+    function cleanup() {
+      clearTimeout(timeout);
+      window.removeEventListener('message', handleMessage);
     }
 
     window.addEventListener('message', handleMessage);
