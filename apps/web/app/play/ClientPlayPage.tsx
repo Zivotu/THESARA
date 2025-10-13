@@ -41,12 +41,24 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
   const storageClient = useMemo(() => {
     if (!token) return null;
     return {
-      getItem: (roomId: string, key: string) =>
-        apiFetch(`/storage/item?roomId=${encodeURIComponent(roomId)}&key=${encodeURIComponent(key)}`, {
-          auth: true,
-          authToken: token,
-          headers: { 'X-Thesara-App-Id': appId },
-        }).then((res: any) => res?.value ?? null),
+      getItem: async (roomId: string, key: string) => {
+        try {
+          const res = await apiFetch(
+            `/storage/item?roomId=${encodeURIComponent(roomId)}&key=${encodeURIComponent(key)}`,
+            {
+              auth: true,
+              authToken: token,
+              headers: { 'X-Thesara-App-Id': appId },
+            },
+          );
+          return res?.value ?? null;
+        } catch (error) {
+          if (error instanceof ApiError && error.status === 404) {
+            return null;
+          }
+          throw error;
+        }
+      },
       setItem: (roomId: string, key: string, value: string) =>
         apiFetch('/storage/item', {
           method: 'POST',
