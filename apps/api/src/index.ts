@@ -126,7 +126,12 @@ export async function createServer() {
       cb(null, resolvedOriginsSet.has(origin));
     },
     credentials: true,
-    allowedHeaders: ['Authorization', 'Content-Type'],
+    allowedHeaders: [
+      'Authorization',
+      'Content-Type',
+      'X-Thesara-App-Id',
+      'x-thesara-app-id',
+    ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });
   await app.register(helmet, { contentSecurityPolicy: false, frameguard: false });
