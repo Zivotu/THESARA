@@ -18,13 +18,15 @@ type AppStorageRecord = AppStorageKey & {
   updatedAt: Date;
 };
 
+type AppStorageWhereUnique = { app_storage_app_room_key: AppStorageKey };
+
 type AppStorageDelegate = {
   upsert(args: {
-    where: { appId_roomId_key: AppStorageKey };
+    where: AppStorageWhereUnique;
     update: { value: string };
     create: AppStorageKey & { value: string };
   }): Promise<AppStorageRecord>;
-  findUnique(args: { where: { appId_roomId_key: AppStorageKey } }): Promise<AppStorageRecord | null>;
+  findUnique(args: { where: AppStorageWhereUnique }): Promise<AppStorageRecord | null>;
   deleteMany(args: { where: AppStorageKey }): Promise<{ count: number }>;
 };
 
@@ -117,7 +119,7 @@ export default async function storageRoutes(app: FastifyInstance) {
     const { roomId, key, value } = parsed.data;
 
     await storageClient.upsert({
-      where: { appId_roomId_key: { appId: ctx.appId, roomId, key } },
+      where: { app_storage_app_room_key: { appId: ctx.appId, roomId, key } },
       update: { value },
       create: { appId: ctx.appId, roomId, key, value },
     });
@@ -134,7 +136,7 @@ export default async function storageRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: 'invalid_query', details: parsed.error.flatten() });
     }
     const { roomId, key } = parsed.data;
-    const where = { appId_roomId_key: { appId: ctx.appId, roomId, key } };
+    const where = { app_storage_app_room_key: { appId: ctx.appId, roomId, key } };
     const existing = await storageClient.findUnique({ where }).catch(() => null);
     if (!existing) {
       return reply.code(404).send({ error: 'not_found' });
