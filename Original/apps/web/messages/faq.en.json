@@ -1,0 +1,121 @@
+[
+  {
+    "id": "general",
+    "title": "General",
+    "items": [
+      {
+        "q": "What is {site}?",
+        "a": "{site} is a marketplace for mini web apps and games. You can run them in the browser, like and share them, and as a creator you can publish in minutes."
+      },
+      {
+        "q": "Do I need an account?",
+        "a": "Browsing is open, but to play/run, like and publish apps you need to sign in or register."
+      },
+      {
+        "q": "Is {site} free?",
+        "a": "Basic usage is free. Advanced features and higher quotas are available on the Pro plan."
+      }
+    ]
+  },
+  {
+    "id": "account-privacy",
+    "title": "Account & Privacy",
+    "items": [
+      {
+        "q": "How do I sign in?",
+        "a": "Sign in with Google or email + password. After sign‑in we create your profile to sync usage."
+      },
+      {
+        "q": "How do I delete my account?",
+        "a": "Contact support or reach us via your profile — we can permanently delete your account and related data."
+      },
+      {
+        "q": "What data do you store?",
+        "a": "We store essential sign‑in data (email, name, avatar) and aggregated metrics (likes, views). We do not sell data to third parties."
+      }
+    ]
+  },
+  {
+    "id": "publishing-creators",
+    "title": "Publishing & Creators",
+    "items": [
+      {
+        "q": "How do I publish an app?",
+        "a": "On the homepage click ‘Publish App’, upload a ZIP bundle or repo and follow the steps. You’ll get a preview, network policy, and fields for description, tags and price."
+      },
+      {
+        "q": "Why is my app ‘pending review’?",
+        "a": "Apps undergo a safety review (automated + manual if needed). If something needs fixing, you’ll receive reasons and guidance."
+      },
+      {
+        "q": "Can I charge for access?",
+        "a": "Yes. Set a price in app details. Paid users or those with a PIN can play/run the app."
+      }
+    ]
+  },
+  {
+    "id": "pricing-subscriptions",
+    "title": "Pricing & Subscriptions",
+    "items": [
+      {
+        "q": "What plans are available?",
+        "a": "Free plan (up to 2 apps) and Gold plan with higher quotas and extras (e.g. larger uploads, priority review)."
+      },
+      {
+        "q": "How do paid apps work?",
+        "a": "Creators set a price. After purchase, users get access (PIN or entitlement) and can play without limits."
+      },
+      {
+        "q": "Refunds?",
+        "a": "If something doesn’t work, contact support within 14 days and we’ll help — including refunds where appropriate."
+      }
+    ]
+  },
+  {
+    "id": "security",
+    "title": "Security & Sandbox",
+    "items": [
+      {
+        "q": "What is the ‘security cage’?",
+        "a": "Apps run in a sandboxed iframe with a strict CSP, limiting network access, cookies and browser APIs."
+      },
+      {
+        "q": "What are network policies (No Net / Media Only / Open Net)?",
+        "a": "No Net: no network calls. Media Only: images/CDN only. Open Net: broader access (with declared domains). The policy is shown on the app details."
+      },
+      {
+        "q": "How to report a problem or abuse?",
+        "a": "Use ‘Report’ on the app details (if visible) or send us the URL and a short description via support."
+      }
+    ]
+  },
+  {
+    "id": "compatibility",
+    "title": "Compatibility & Performance",
+    "items": [
+      {
+        "q": "Which browsers are supported?",
+        "a": "Best with latest Chrome, Edge, Safari and Firefox. On mobile we recommend Chrome (Android) and Safari (iOS)."
+      },
+      {
+        "q": "App loads slowly — what to do?",
+        "a": "Check your connection and try again. If it persists, contact the creator via comments or support with the app URL."
+      }
+    ]
+  },
+  {
+    "id": "help",
+    "title": "Help & Support",
+    "items": [
+      {
+        "q": "How do I reach support?",
+        "a": "Write via the support page or from your profile. Include the app URL and a short problem description."
+      },
+      {
+        "q": "Where are updates and roadmap?",
+        "a": "We publish updates in the app and on our channels — look for ‘Changelog’ in the menu or follow us on social."
+      }
+    ]
+  }
+]
+

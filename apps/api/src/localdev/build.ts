@@ -2,8 +2,36 @@
 import { promises as fsp } from 'node:fs';
 import path from 'node:path';
 import { getLocalDevConfig, type BuildMode } from './env.js';
+import { getConfig } from '../config.js';
 
 export type Logger = (chunk: string) => void;
+
+async function pathExists(p: string): Promise<boolean> {
+  try {
+    await fsp.access(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function copyEntry(src: string, dest: string): Promise<void> {
+  const stat = await fsp.stat(src);
+  if (stat.isDirectory()) {
+    await fsp.mkdir(dest, { recursive: true });
+    const entries = await fsp.readdir(src);
+    for (const entry of entries) {
+      await copyEntry(path.join(src, entry), path.join(dest, entry));
+    }
+    return;
+  }
+  if (stat.isFile()) {
+    await fsp.mkdir(path.dirname(dest), { recursive: true });
+    await fsp.copyFile(src, dest);
+    return;
+  }
+  // Skip special file types (symlinks, sockets, etc.)
+}
 
 function run(cmd: string, args: string[], opts: { cwd: string; env?: NodeJS.ProcessEnv; timeoutMs?: number }, log: Logger): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -21,6 +49,58 @@ function run(cmd: string, args: string[], opts: { cwd: string; env?: NodeJS.Proc
 }
 
 type PackageManager = 'pnpm' | 'npm' | 'yarn';
+
+async function runStaticFallback(projectDir: string, log: Logger): Promise<void> {
+  const distDir = path.join(projectDir, 'dist');
+  const entries = await fsp.readdir(projectDir, { withFileTypes: true });
+
+  const indexCandidates: string[] = [];
+  for (const entry of entries) {
+    if (entry.isFile() && entry.name.toLowerCase() === 'index.html') {
+      indexCandidates.push(path.join(projectDir, entry.name));
+    }
+  }
+
+  let sourceRoot = projectDir;
+  if (!indexCandidates.length) {
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const candidateDir = path.join(projectDir, entry.name);
+      const candidateIndex = path.join(candidateDir, 'index.html');
+      if (await pathExists(candidateIndex)) {
+        sourceRoot = candidateDir;
+        indexCandidates.push(candidateIndex);
+        break;
+      }
+    }
+  }
+
+  if (!indexCandidates.length) {
+    throw new Error('index_html_missing');
+  }
+
+  if (sourceRoot === distDir) {
+    log('[localdev] static builder fallback -> existing dist/ detected');
+    return;
+  }
+
+  await fsp.rm(distDir, { recursive: true, force: true });
+  await fsp.mkdir(distDir, { recursive: true });
+
+  const sourceEntries = await fsp.readdir(sourceRoot, { withFileTypes: true });
+  for (const entry of sourceEntries) {
+    if (sourceRoot === projectDir && entry.name === 'dist') continue;
+    const srcPath = path.join(sourceRoot, entry.name);
+    const destPath = path.join(distDir, entry.name);
+    if (entry.isDirectory()) {
+      await copyEntry(srcPath, destPath);
+    } else if (entry.isFile()) {
+      await fsp.copyFile(srcPath, destPath);
+    }
+  }
+
+  log(`[localdev] static builder fallback -> dist/ (source=${path.relative(projectDir, sourceRoot) || '.'})`);
+}
 
 async function runNative(projectDir: string, allowScripts: boolean, log: Logger): Promise<void> {
   // Validate files
@@ -222,6 +302,18 @@ async function runDocker(projectDir: string, allowScripts: boolean, log: Logger)
 }
 
 export async function runBuild(projectDir: string, mode: BuildMode, allowScripts: boolean, log: Logger): Promise<void> {
+  const cfg = getConfig();
+  if (cfg.PUBLISH_STATIC_BUILDER) {
+    const hasPackageJson = await pathExists(path.join(projectDir, 'package.json'));
+    const hasPnpmLock = await pathExists(path.join(projectDir, 'pnpm-lock.yaml'));
+    if (!hasPackageJson || !hasPnpmLock) {
+      log(
+        `[localdev] static builder fallback (package.json=${hasPackageJson ? 'yes' : 'no'}, pnpm-lock.yaml=${hasPnpmLock ? 'yes' : 'no'})`,
+      );
+      await runStaticFallback(projectDir, log);
+      return;
+    }
+  }
   if (mode === 'docker') return runDocker(projectDir, allowScripts, log);
   return runNative(projectDir, allowScripts, log);
 }

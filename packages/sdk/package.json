@@ -3,5 +3,17 @@
   "private": true,
   "version": "0.0.1",
   "types": "./index.d.ts",
-  "main": "./index.js"
+  "main": "./index.js",
+  "exports": {
+    ".": {
+      "require": "./index.js",
+      "default": "./index.js",
+      "types": "./index.d.ts"
+    },
+    "./rooms": {
+      "require": "./rooms-client.js",
+      "default": "./rooms-client.js",
+      "types": "./rooms-client.d.ts"
+    }
+  }
 }

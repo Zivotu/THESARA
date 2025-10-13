@@ -44,10 +44,16 @@ import trialRoutes from './routes/trial.js';
 import ownerRoutes from './routes/owner.js';
 import versionRoutes from './routes/version.js';
 import entitlementsRoutes from './routes/entitlements.js';
+import storageRoutes from './routes/storage.js';
 import { startCreatexBuildWorker } from './workers/createxBuildWorker.js';
 import localDevRoutes from './localdev/routes.js';
 import { startLocalDevWorker } from './localdev/worker.js';
 import { ensureDbInitialized } from './db.js';
+import jwtPlugin from './plugins/jwt.js';
+import metricsPlugin from './plugins/metrics.js';
+import swaggerPlugin from './plugins/swagger.js';
+import rateLimitPlugin from './plugins/rateLimit.js';
+import roomsSyncV1Routes from './routes/roomsV1/index.js';
 
 export let app: FastifyInstance;
 
@@ -88,6 +94,11 @@ export async function createServer() {
     { PORT: config.PORT, NODE_ENV: process.env.NODE_ENV, BUNDLE_ROOT, PREVIEW_ROOT },
     'env'
   );
+
+  await app.register(metricsPlugin);
+  await app.register(jwtPlugin);
+  await app.register(rateLimitPlugin);
+  await app.register(swaggerPlugin);
 
   const isProd = process.env.NODE_ENV === 'production';
   const allowedFromEnv = (process.env.ALLOWED_ORIGINS || '')
@@ -463,9 +474,11 @@ export async function createServer() {
   await app.register(createxProxy);
   await app.register(recenzijeRoutes);
   await app.register(roomsRoutes);
+  await app.register(roomsSyncV1Routes);
   await app.register(shims);
   await app.register(uploadRoutes);
   await app.register(publishRoutes);
+  await app.register(storageRoutes);
   await app.register(listingsRoutes);
   await app.register(accessRoutes);
   await app.register(versionRoutes);

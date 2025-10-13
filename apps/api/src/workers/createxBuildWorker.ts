@@ -7,6 +7,7 @@ import { Queue, Worker } from 'bullmq';
 import { initBuild, updateBuild } from '../models/Build.js';
 import { getBuildDir } from '../paths.js';
 import { REDIS_URL } from '../config.js';
+import { readApps, writeApps } from '../db.js';
 
 const QUEUE_NAME = 'createx-build';
 
@@ -66,6 +67,44 @@ function logState(id: string, state: string) {
   else console.info(payload, 'build:state');
 }
 
+async function ensureStorageCapabilityFlag(buildId: string): Promise<void> {
+  try {
+    const apps = await readApps();
+    const idx = apps.findIndex(
+      (app: any) => app?.pendingBuildId === buildId || app?.buildId === buildId,
+    );
+    if (idx < 0) return;
+    const current = apps[idx] as any;
+    const capabilities = { ...(current.capabilities || {}) };
+    const features = new Set<string>(
+      Array.isArray(capabilities.features) ? capabilities.features : [],
+    );
+    const hasStorageEnabled = capabilities.storage?.enabled === true;
+    if (!hasStorageEnabled && !features.has('storage')) {
+      return;
+    }
+    let changed = false;
+    if (!hasStorageEnabled) {
+      capabilities.storage = { ...(capabilities.storage || {}), enabled: true };
+      changed = true;
+    }
+    if (!features.has('storage')) {
+      features.add('storage');
+      changed = true;
+    }
+    if (!changed) return;
+    capabilities.features = Array.from(features);
+    apps[idx] = {
+      ...current,
+      capabilities,
+      updatedAt: Date.now(),
+    };
+    await writeApps(apps as any);
+  } catch (err) {
+    console.warn({ buildId, err }, 'storage_capability_update_failed');
+  }
+}
+
 export async function enqueueCreatexBuild(buildId: string = randomUUID()): Promise<string> {
   if (process.env.CREATEX_WORKER_ENABLED !== 'true') {
     throw queueDisabled();
@@ -101,6 +140,7 @@ export function startCreatexBuildWorker(): BuildWorkerHandle {
         await updateBuild(buildId, { state: 'build', progress: 0 });
         logState(buildId, 'build');
         await runBuildProcess(buildId);
+        await ensureStorageCapabilityFlag(buildId);
         // Hand off to review queue; admin can approve to move to published
         await updateBuild(buildId, { state: 'pending_review', progress: 100 });
         logState(buildId, 'pending_review');

@@ -24,6 +24,12 @@ export interface AppCapabilities {
     domains?: string[];
     [key: string]: any;
   };
+  storage?: {
+    enabled?: boolean;
+    rooms?: boolean;
+    [key: string]: any;
+  };
+  features?: string[];
   [key: string]: any;
 }
 

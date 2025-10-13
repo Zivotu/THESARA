@@ -12,7 +12,10 @@ import {
 import { getConfig } from './config.js';
 import { AppError } from './lib/errors.js';
 import { writeArtifact, resolveBuildDir } from './utils/artifacts.js';
+import { zipDirectoryToBuffer } from './lib/zip.js';
 import { updateBuild } from './models/Build.js';
+import { transformHtmlLite } from './lib/csp.js';
+import { detectRoomsStorageKeys } from './lib/roomsBridge.js';
 
 const exec = promisify(execCb);
 
@@ -76,6 +79,84 @@ export class SafePublishPipeline {
 
   async run(appId: string, dir: string): Promise<SafePublishResult> {
     try {
+      const cfg = getConfig();
+      try {
+        const originalZip = await zipDirectoryToBuffer(dir);
+        await writeArtifact(appId, 'bundle_original.zip', originalZip);
+      } catch (err: any) {
+        this.log.warn?.({ id: appId, err }, 'publish:zip_original_failed');
+      }
+
+      if (cfg.PUBLISH_CSP_AUTOFIX !== false) {
+        const indexPath = path.join(dir, 'index.html');
+        try {
+          await fs.promises.access(indexPath);
+          const roomsAllowlist = Array.isArray(cfg.THESARA_ROOMS_KEYS)
+            ? cfg.THESARA_ROOMS_KEYS
+            : [];
+          let detectedRoomsKeys: string[] = [];
+          if (cfg.PUBLISH_ROOMS_AUTOBRIDGE && roomsAllowlist.length) {
+            detectedRoomsKeys = await detectRoomsStorageKeys(dir, roomsAllowlist);
+            if (detectedRoomsKeys.length) {
+              this.log.info?.(
+                { id: appId, roomsKeys: detectedRoomsKeys },
+                'publish:rooms_autobridge_detected',
+              );
+            } else {
+              this.log.info?.({ id: appId }, 'publish:rooms_autobridge_skipped_no_keys');
+            }
+          }
+
+          const report = await transformHtmlLite({
+            indexPath,
+            rootDir: dir,
+            bundleModuleScripts: true,
+            vendorExternalResources: true,
+            vendorMaxBytes: cfg.PUBLISH_VENDOR_MAX_DOWNLOAD_BYTES,
+            vendorTimeoutMs: cfg.PUBLISH_VENDOR_TIMEOUT_MS,
+            failOnInlineHandlers: cfg.PUBLISH_CSP_AUTOFIX_STRICT,
+            autoBridgeRooms: cfg.PUBLISH_ROOMS_AUTOBRIDGE && detectedRoomsKeys.length > 0,
+            roomsStorageKeys: detectedRoomsKeys,
+            apiBase: cfg.PUBLIC_BASE,
+          });
+          this.log.info(
+            {
+              id: appId,
+              inlineScripts: report.inlineScripts.length,
+              totalInlineScripts: report.totalInlineScripts,
+              inlineStyles: report.inlineStyles.length,
+              inlineHandlers: report.inlineEventHandlers.length,
+              vendored: report.vendored.length,
+              baseRemoved: report.baseRemoved,
+            },
+            'publish:csp_autofix',
+          );
+          const reportPayload = {
+            generatedAt: new Date().toISOString(),
+            inlineScripts: report.inlineScripts,
+            totalInlineScripts: report.totalInlineScripts,
+            inlineStyles: report.inlineStyles,
+            totalInlineStyles: report.totalInlineStyles,
+            inlineEventHandlers: report.inlineEventHandlers,
+            vendored: report.vendored,
+            moduleBundle: report.moduleBundle,
+            baseRemoved: report.baseRemoved,
+            warnings: report.warnings,
+          };
+          await fs.promises.writeFile(
+            path.join(dir, 'transform_report_v1.json'),
+            JSON.stringify(reportPayload, null, 2),
+            'utf8',
+          );
+        } catch (err: any) {
+          if (err?.code !== 'ENOENT') {
+            this.log.warn?.({ id: appId, err }, 'publish:csp_autofix_failed');
+          }
+        }
+      } else {
+        this.log.info?.({ id: appId }, 'publish:csp_autofix_skipped');
+      }
+
       await this.generateArtifacts(appId, dir);
       await this.staticScan(dir);
       await this.vulnerabilityScan(dir);
@@ -92,6 +173,12 @@ export class SafePublishPipeline {
         throw new AppError('NET_OPEN_NEEDS_DOMAINS');
       }
       if (networkAccess === 'reviewed-open-net') {
+        try {
+          const transformedZip = await zipDirectoryToBuffer(dir);
+          await writeArtifact(appId, 'bundle_transformed.zip', transformedZip);
+        } catch (err: any) {
+          this.log.warn?.({ id: appId, err }, 'publish:zip_transformed_failed');
+        }
         this.log.info({ id: appId }, 'upload:start');
         await this.uploader.uploadDir(dir, appId);
         this.log.info({ id: appId }, 'upload:done');
@@ -101,14 +188,26 @@ export class SafePublishPipeline {
           issues: toIssues(['reviewed-open-net']),
         };
       }
-      const { LLM_PROVIDER, OPENAI_API_KEY, LLM_REVIEW_ENABLED } = getConfig();
+      const { LLM_PROVIDER, OPENAI_API_KEY, LLM_REVIEW_ENABLED } = cfg;
       if (!LLM_REVIEW_ENABLED || LLM_PROVIDER !== 'openai' || !OPENAI_API_KEY) {
+        try {
+          const transformedZip = await zipDirectoryToBuffer(dir);
+          await writeArtifact(appId, 'bundle_transformed.zip', transformedZip);
+        } catch (err: any) {
+          this.log.warn?.({ id: appId, err }, 'publish:zip_transformed_failed');
+        }
         this.log.info({ id: appId }, 'upload:start');
         await this.uploader.uploadDir(dir, appId);
         this.log.info({ id: appId }, 'upload:done');
         return { status: 'pending-review', issues: [] };
       }
       await this.llmTriage(dir, OPENAI_API_KEY);
+      try {
+        const transformedZip = await zipDirectoryToBuffer(dir);
+        await writeArtifact(appId, 'bundle_transformed.zip', transformedZip);
+      } catch (err: any) {
+        this.log.warn?.({ id: appId, err }, 'publish:zip_transformed_failed');
+      }
       this.log.info({ id: appId }, 'upload:start');
       await this.uploader.uploadDir(dir, appId);
       this.log.info({ id: appId }, 'upload:done');
@@ -158,6 +257,7 @@ export class SafePublishPipeline {
   }
 
   private async generateArtifacts(buildId: string, dir: string) {
+    const cfg = getConfig();
     const files = this.listFiles(dir).map((f) => path.relative(dir, f));
     const astJson = JSON.stringify({ files }, null, 2);
     await fs.promises.writeFile(path.join(dir, 'AST_SUMMARY.json'), astJson);
@@ -217,10 +317,16 @@ export class SafePublishPipeline {
         await updateBuild(buildId, { networkPolicy: String(manifest.networkPolicy) as any });
       }
     } catch {}
-    const plan = { injectSessionSDK: getConfig().INJECT_SESSION_SDK };
+    const plan = { injectSessionSDK: cfg.INJECT_SESSION_SDK };
     const planJson = JSON.stringify(plan, null, 2);
     await fs.promises.writeFile(path.join(dir, 'transform_plan_v1.json'), planJson);
     await writeArtifact(buildId, 'build/transform_plan_v1.json', planJson);
+
+    try {
+      const transformReportPath = path.join(dir, 'transform_report_v1.json');
+      const transformReport = await fs.promises.readFile(transformReportPath, 'utf8');
+      await writeArtifact(buildId, 'build/transform_report_v1.json', transformReport);
+    } catch {}
   }
 
   private async staticScan(dir: string): Promise<void> {

@@ -7,8 +7,31 @@ const __dirname = path.dirname(__filename);
 const PKG_ROOT = path.resolve(__dirname, '..');
 const REPO_ROOT = path.resolve(PKG_ROOT, '../..');
 
-const PROD_BUNDLE_DEFAULT = '/home/conexa/api.thesara.space/storage/bundles';
-const PROD_PREVIEW_DEFAULT = '/home/conexa/api.thesara.space/storage/previews';
+const PROD_BUNDLE_DEFAULT = '/srv/thesara/storage/bundles';
+const PROD_PREVIEW_DEFAULT = '/srv/thesara/storage/previews';
+const DEV_BUNDLE_DEFAULT = path.join(REPO_ROOT, 'storage/bundles');
+const DEV_PREVIEW_DEFAULT = path.join(process.cwd(), 'review', 'builds');
+
+function resolveBundleDir(nodeEnv: string | undefined): string {
+  const isProdEnv = nodeEnv === 'production';
+  const fallback = isProdEnv ? PROD_BUNDLE_DEFAULT : DEV_BUNDLE_DEFAULT;
+  const raw =
+    process.env.BUNDLE_STORAGE_PATH ?? process.env.BUNDLE_ROOT ?? fallback;
+  // @note Accept both BUNDLE_STORAGE_PATH and legacy BUNDLE_ROOT for VPS deploys.
+  return path.resolve(raw);
+}
+
+function resolvePreviewDir(nodeEnv: string | undefined): string {
+  const isProdEnv = nodeEnv === 'production';
+  const fallback = isProdEnv ? PROD_PREVIEW_DEFAULT : DEV_PREVIEW_DEFAULT;
+  const raw =
+    process.env.PREVIEW_STORAGE_PATH ?? process.env.PREVIEW_ROOT ?? fallback;
+  // @note PREVIEW_ROOT alias keeps older server configs working without edits.
+  return path.resolve(raw);
+}
+
+export const BUNDLE_DIR = resolveBundleDir(process.env.NODE_ENV);
+export const PREVIEW_DIR = resolvePreviewDir(process.env.NODE_ENV);
 
 // Commonly used env flags exposed as simple constants for easy importing
 const rawLlmProvider = (process.env.LLM_PROVIDER || '').toLowerCase();
@@ -34,6 +57,17 @@ export const REQUIRE_PUBLISH_APPROVAL =
 export const INJECT_SESSION_SDK = process.env.INJECT_SESSION_SDK !== 'false';
 export const STRIPE_AUTOMATIC_TAX =
   process.env.STRIPE_AUTOMATIC_TAX === 'true';
+export const PUBLISH_STATIC_BUILDER = process.env.PUBLISH_STATIC_BUILDER !== '0';
+export const PUBLISH_CSP_AUTOFIX = process.env.PUBLISH_CSP_AUTOFIX !== '0';
+export const PUBLISH_CSP_AUTOFIX_STRICT = process.env.PUBLISH_CSP_AUTOFIX_STRICT === '1';
+export const PUBLISH_ROOMS_AUTOBRIDGE =
+  process.env.PUBLISH_ROOMS_AUTOBRIDGE !== '0';
+export const THESARA_ROOMS_KEYS = (process.env.THESARA_ROOMS_KEYS || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+export const PUBLISH_VENDOR_MAX_MB = Number(process.env.PUBLISH_VENDOR_MAX_MB ?? '20');
+export const PUBLISH_VENDOR_TIMEOUT_MS = Number(process.env.PUBLISH_VENDOR_TIMEOUT_MS ?? '15000');
 
 export const CONFIG = {
   REQUIRE_PUBLISH_APPROVAL,
@@ -48,6 +82,13 @@ export const CONFIG = {
   INJECT_SESSION_SDK,
   STRIPE_AUTOMATIC_TAX,
   REDIS_URL,
+  PUBLISH_STATIC_BUILDER,
+  PUBLISH_CSP_AUTOFIX,
+  PUBLISH_CSP_AUTOFIX_STRICT,
+  PUBLISH_VENDOR_MAX_MB,
+  PUBLISH_VENDOR_TIMEOUT_MS,
+  PUBLISH_ROOMS_AUTOBRIDGE,
+  THESARA_ROOMS_KEYS,
 };
 
 function getEnv(key: string, def?: string): string {
@@ -68,20 +109,30 @@ function parseNumberEnv(name: string, defaultValue: number): number {
 }
 
 export function getConfig() {
+  const nodeEnv = process.env.NODE_ENV;
   const PORT = parseNumberEnv('PORT', 8788);
   const PUBLIC_BASE = process.env.PUBLIC_BASE || `http://127.0.0.1:${PORT}`;
   const WEB_BASE = process.env.WEB_BASE || 'http://localhost:3000';
   const STRIPE_SUCCESS_URL =
     process.env.STRIPE_SUCCESS_URL || `${WEB_BASE}/billing/success`;
-  const isProd = process.env.NODE_ENV === 'production';
-  const bundleStoragePath = path.resolve(
-    process.env.BUNDLE_STORAGE_PATH ??
-    (isProd ? PROD_BUNDLE_DEFAULT : path.join(REPO_ROOT, 'storage/bundles'))
-  );
-  const previewStoragePath = path.resolve(
-    process.env.PREVIEW_STORAGE_PATH ??
-    (isProd ? PROD_PREVIEW_DEFAULT : path.join(process.cwd(), 'review', 'builds'))
-  );
+  const bundleStoragePath = resolveBundleDir(nodeEnv);
+  const previewStoragePath = resolvePreviewDir(nodeEnv);
+  const isProd = nodeEnv === 'production';
+  const roomsJwtSecret =
+    process.env.JWT_SECRET ||
+    (isProd ? undefined : 'dev-rooms-secret-please-change');
+  if (!roomsJwtSecret) {
+    throw new Error('JWT_SECRET is required to issue room session tokens.');
+  }
+  const publishStaticBuilder = process.env.PUBLISH_STATIC_BUILDER !== '0';
+  const publishCspAutofix = process.env.PUBLISH_CSP_AUTOFIX !== '0';
+  const publishCspAutofixStrict = process.env.PUBLISH_CSP_AUTOFIX_STRICT === '1';
+  const publishVendorMaxMb = Number.isFinite(PUBLISH_VENDOR_MAX_MB)
+    ? PUBLISH_VENDOR_MAX_MB
+    : 20;
+  const publishVendorTimeoutMs = Number.isFinite(PUBLISH_VENDOR_TIMEOUT_MS)
+    ? PUBLISH_VENDOR_TIMEOUT_MS
+    : 15000;
   if (!STRIPE_SUCCESS_URL.includes('/billing/success')) {
     console.warn(
       'STRIPE_SUCCESS_URL does not contain /billing/success; check your configuration.'
@@ -231,5 +282,27 @@ export function getConfig() {
       redisUrl: REDIS_URL,
       collection: process.env.RATE_LIMIT_COLLECTION || 'rate_limits',
     },
+    ROOMS_V1: {
+      jwtSecret: roomsJwtSecret,
+      jwtIssuer: process.env.JWT_ISSUER || 'thesara-api',
+      jwtAudience: process.env.JWT_AUDIENCE || 'rooms',
+      argon2: {
+        memoryCost: parseNumberEnv('ARGON2_MEMORY_COST', 4096),
+        timeCost: parseNumberEnv('ARGON2_TIME_COST', 3),
+        parallelism: parseNumberEnv('ARGON2_PARALLELISM', 1),
+      },
+      pollIntervalMs: parseNumberEnv('ROOMS_POLL_INTERVAL_MS', 2000),
+      maxRoomsPerMember: parseNumberEnv('ROOMS_MAX_PER_MEMBER', 50),
+      rateLimitMax: parseNumberEnv('RATE_LIMIT_MAX', 60),
+      tokenTtlSeconds: parseNumberEnv('ROOMS_TOKEN_TTL_SECONDS', 24 * 60 * 60),
+      idempotencyTtlMs: parseNumberEnv('ROOMS_IDEMPOTENCY_TTL_MS', 15 * 60 * 1000),
+    },
+    PUBLISH_STATIC_BUILDER: publishStaticBuilder,
+    PUBLISH_CSP_AUTOFIX: publishCspAutofix,
+    PUBLISH_CSP_AUTOFIX_STRICT: publishCspAutofixStrict,
+    PUBLISH_VENDOR_MAX_DOWNLOAD_BYTES: Math.max(0, publishVendorMaxMb * 1024 * 1024),
+    PUBLISH_VENDOR_TIMEOUT_MS: publishVendorTimeoutMs,
+    PUBLISH_ROOMS_AUTOBRIDGE,
+    THESARA_ROOMS_KEYS,
   };
 }

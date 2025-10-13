@@ -1,0 +1,16 @@
+export {
+  RoomsClient,
+  RoomsClientOptions,
+  CreateRoomRequest,
+  JoinRoomRequest,
+  RoomSummary,
+  MemberSummary,
+  ItemSummary,
+  PurchaseRecord,
+  RoomState,
+  RoomsAuth,
+  AddItemRequest,
+  UpdateItemRequest,
+  FinalizePurchaseRequest,
+  RoomsFetchError,
+} from './index';

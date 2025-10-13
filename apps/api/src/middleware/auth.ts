@@ -16,6 +16,18 @@ const plugin: FastifyPluginAsync = async (app) => {
   app.addHook('preHandler', async (req: FastifyRequest, reply: FastifyReply) => {
     const auth = req.headers['authorization'];
     const debug = process.env.DEBUG_AUTH === '1';
+
+    // For development, if no auth header is present, create a mock user.
+    if (!auth && process.env.NODE_ENV !== 'production') {
+      req.authUser = {
+        uid: 'dev-user',
+        role: 'admin', // Or 'user', depending on what's more convenient for development
+        claims: { uid: 'dev-user', role: 'admin', admin: true } as any,
+      };
+      if (debug) app.log.info({ authUser: req.authUser }, 'auth:mock');
+      return;
+    }
+
     if (!auth || typeof auth !== 'string') {
       if (debug) app.log.info({ hasAuth: false }, 'auth');
       return;

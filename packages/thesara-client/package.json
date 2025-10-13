@@ -1,0 +1,8 @@
+{
+  "name": "@thesara/client",
+  "version": "0.1.0",
+  "description": "Thin client helper for initializing Thesara storage from within embedded applications.",
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "sideEffects": false
+}

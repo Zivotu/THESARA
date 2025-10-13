@@ -110,6 +110,7 @@ export default function CreatePage() {
   const [previewError, setPreviewError] = useState('');
   const [previewUploading, setPreviewUploading] = useState(false);
   const [previewAppliedSlug, setPreviewAppliedSlug] = useState<string | null>(null);
+  const [storageEnabled, setStorageEnabled] = useState(false);
   const previewInputRef = useRef<HTMLInputElement | null>(null);
   const bundleInputRef = useRef<HTMLInputElement | null>(null);
   const pendingPreviewSlugRef = useRef<string | null>(null);
@@ -715,6 +716,19 @@ export default function CreatePage() {
         // Ignore preview prep failures; publish will fall back to default later
       }
 
+      const capabilitiesPayload: Record<string, any> = {
+        permissions: {
+          camera: manifest.permissions.camera,
+          microphone: manifest.permissions.microphone,
+          webgl: manifest.permissions.webgl,
+          fileDownload: manifest.permissions.download,
+        },
+      };
+      if (storageEnabled) {
+        capabilitiesPayload.storage = { enabled: true };
+        capabilitiesPayload.features = ['storage'];
+      }
+
       const payload = {
         id: appId,
         title: manifest.name,
@@ -726,14 +740,7 @@ export default function CreatePage() {
           photo: auth?.currentUser?.photoURL || undefined,
           handle: (auth?.currentUser?.email || '').split('@')[0] || undefined,
         },
-        capabilities: {
-          permissions: {
-            camera: manifest.permissions.camera,
-            microphone: manifest.permissions.microphone,
-            webgl: manifest.permissions.webgl,
-            fileDownload: manifest.permissions.download,
-          },
-        },
+        capabilities: capabilitiesPayload,
         inlineCode: code,
         visibility: 'public',
         ...(previewAttachment ? { preview: previewAttachment } : {}),
@@ -899,6 +906,26 @@ export default function CreatePage() {
               value={manifest.description}
               onChange={(e) => setManifest({ ...manifest, description: e.target.value })}
             />
+          </div>
+          <div className="mt-3 border rounded p-3 bg-gray-50">
+            <label className="flex items-start gap-3 text-sm">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={storageEnabled}
+                onChange={(e) => setStorageEnabled(e.target.checked)}
+              />
+              <span>
+                <span className="block font-medium">
+                  Omogući Thesara Storage (za multi-user sobe i sesije)
+                </span>
+                <span className="block text-xs text-gray-600 mt-1 leading-relaxed">
+                  Kada je uključeno, tvojoj aplikaciji je dostupan `thesara.storage` objekt
+                  s asinhronim metodama `getItem`, `setItem` i `removeItem` za dijeljenje
+                  podataka između soba ili korisnika preko našeg servera.
+                </span>
+              </span>
+            </label>
           </div>
           <div className="mt-3 space-y-2">
             <h3 className="font-medium">Prijevodi (neobavezno)</h3>

@@ -1,0 +1,121 @@
+[
+  {
+    "id": "allgemein",
+    "title": "Allgemein",
+    "items": [
+      {
+        "q": "Was ist {site}?",
+        "a": "{site} ist ein Marktplatz für Mini‑Web‑Apps und Spiele. Du kannst sie im Browser ausführen, liken und teilen – und als Creator in wenigen Minuten veröffentlichen."
+      },
+      {
+        "q": "Brauche ich ein Konto?",
+        "a": "Zum Stöbern nicht, aber zum Spielen/Ausführen, Liken und Veröffentlichen ist eine Anmeldung erforderlich."
+      },
+      {
+        "q": "Ist {site} kostenlos?",
+        "a": "Die Grundnutzung ist kostenlos. Erweiterte Funktionen und höhere Kontingente gibt es im Pro‑Plan."
+      }
+    ]
+  },
+  {
+    "id": "konto-datenschutz",
+    "title": "Konto & Datenschutz",
+    "items": [
+      {
+        "q": "Wie melde ich mich an?",
+        "a": "Mit Google oder E‑Mail + Passwort. Nach der Anmeldung erstellen wir dein Profil zur Synchronisierung."
+      },
+      {
+        "q": "Wie lösche ich mein Konto?",
+        "a": "Kontaktiere den Support oder schreibe uns über dein Profil – wir können dein Konto und zugehörige Daten dauerhaft löschen."
+      },
+      {
+        "q": "Welche Daten speichert ihr?",
+        "a": "Wir speichern Anmeldedaten (E‑Mail, Name, Avatar) sowie aggregierte Metriken (Likes, Aufrufe). Keine Weitergabe an Dritte."
+      }
+    ]
+  },
+  {
+    "id": "veroeffentlichung-creators",
+    "title": "Veröffentlichung & Creator",
+    "items": [
+      {
+        "q": "Wie veröffentliche ich eine App?",
+        "a": "Auf der Startseite ‘App veröffentlichen’ wählen, ZIP‑Bundle oder Repo hochladen und den Schritten folgen. Du erhältst eine Vorschau, Netzwerkrichtlinie sowie Felder für Beschreibung, Tags und Preis."
+      },
+      {
+        "q": "Warum steht meine App auf ‘pending review’?",
+        "a": "Apps durchlaufen eine Sicherheitsprüfung (automatisiert + bei Bedarf manuell). Wenn etwas zu ändern ist, bekommst du Gründe und Hinweise."
+      },
+      {
+        "q": "Kann ich den Zugang kostenpflichtig machen?",
+        "a": "Ja. Stelle im App‑Detail einen Preis ein. Bezahler:innen oder Nutzer:innen mit PIN können die App spielen/ausführen."
+      }
+    ]
+  },
+  {
+    "id": "preise-abos",
+    "title": "Preise & Abos",
+    "items": [
+      {
+        "q": "Welche Pläne gibt es?",
+        "a": "Free‑Plan (bis zu 2 Apps) und Gold‑Plan mit höheren Kontingenten und Extras (z. B. größere Uploads, priorisiertes Review)."
+      },
+      {
+        "q": "Wie funktionieren kostenpflichtige Apps?",
+        "a": "Creator setzen einen Preis fest. Nach dem Kauf erhalten Nutzer:innen Zugriff (PIN oder Entitlement) und können ohne Limits spielen."
+      },
+      {
+        "q": "Rückerstattungen?",
+        "a": "Wenn etwas nicht funktioniert, kontaktiere den Support innerhalb von 14 Tagen – inkl. Rückerstattung in begründeten Fällen."
+      }
+    ]
+  },
+  {
+    "id": "sicherheit",
+    "title": "Sicherheit & Sandbox",
+    "items": [
+      {
+        "q": "Was ist der ‘Sicherheitskäfig’?",
+        "a": "Apps laufen in einem sandboxed iframe mit striktem CSP. Das begrenzt Netzwerkzugriffe, Cookies und Browser‑APIs."
+      },
+      {
+        "q": "Was sind Netzwerkrichtlinien (No Net / Media Only / Open Net)?",
+        "a": "No Net: keine Netzwerkaufrufe. Media Only: nur Bilder/CDN. Open Net: breiter Zugriff (mit genannten Domains). Die Richtlinie steht auf der App‑Detailseite."
+      },
+      {
+        "q": "Wie melde ich Probleme/Missbrauch?",
+        "a": "Über ‘Report’ auf der App‑Detailseite (falls sichtbar) oder sende uns URL + Kurzbeschreibung über den Support."
+      }
+    ]
+  },
+  {
+    "id": "kompatibilitaet",
+    "title": "Kompatibilität & Performance",
+    "items": [
+      {
+        "q": "Welche Browser werden unterstützt?",
+        "a": "Am besten funktionieren die neuesten Versionen von Chrome, Edge, Safari und Firefox. Auf Mobilgeräten empfehlen wir Chrome (Android) und Safari (iOS)."
+      },
+      {
+        "q": "Die App lädt langsam – was tun?",
+        "a": "Verbindung prüfen und erneut versuchen. Hält es an, wende dich an den/die Creator:in per Kommentar oder an den Support mit App‑URL."
+      }
+    ]
+  },
+  {
+    "id": "hilfe",
+    "title": "Hilfe & Support",
+    "items": [
+      {
+        "q": "Wie kontaktiere ich den Support?",
+        "a": "Über die Support‑Seite oder dein Profil. Bitte App‑URL und kurze Problembeschreibung angeben."
+      },
+      {
+        "q": "Wo gibt es Neuigkeiten und Roadmap?",
+        "a": "Updates veröffentlichen wir in der App und auf unseren Kanälen – ‘Changelog’ im Menü oder folge uns in den sozialen Medien."
+      }
+    ]
+  }
+]
+

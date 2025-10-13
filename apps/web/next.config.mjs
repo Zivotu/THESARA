@@ -34,6 +34,9 @@ const baseConfig = {
       return [];
     }
     return [
+      // Proxy app routes to the API server for same-origin iframe loading
+      { source: '/app/:path*', destination: `${API_URL}/app/:path*` },
+
       // Static player assets served by API (ensures frontend 3000 can open /builds/* URLs)
       { source: '/builds/:path*', destination: `${API_URL}/builds/:path*` },
       { source: '/review/builds/:path*', destination: `${API_URL}/review/builds/:path*` },

@@ -1,5 +1,6 @@
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import { initializeThesara, ThesaraStorage } from '@thesara/client';
 import { Question, RoomStatus, User, QuizRoom, Player, QuestionType, Answer, Result } from './types';
 import { parseJsonQuestions, parseCsvQuestions, calculateResults, exportSummaryCSV, exportDetailedCSV } from './services/quizUtils';
 import Button from './components/Button';
@@ -19,16 +20,28 @@ const generatePin = () => Math.floor(100000 + Math.random() * 900000).toString()
 
 // Main App Component
 const App: React.FC = () => {
+    const [storage, setStorage] = useState<ThesaraStorage | null>(null);
+    const [storageError, setStorageError] = useState<string | null>(null);
     const [currentUser, setCurrentUser] = useState<User>(MOCK_USERS[0]);
     const [room, setRoom] = useState<QuizRoom | null>(null);
     const [error, setError] = useState<string>('');
     const [loading, setLoading] = useState<boolean>(false);
+
+    useEffect(() => {
+        initializeThesara()
+            .then(setStorage)
+            .catch(err => {
+                console.error(err);
+                setStorageError('Thesara storage nije dostupan. Ova aplikacija zahtijeva thesara.storage. Provjeri da je dostupan u globalnom objektu.');
+            });
+    }, []);
 
     // --- MOCK BACKEND LOGIC ---
     // In a real app, this would be handled by Firestore listeners and functions.
     // For this example, we manage state locally.
 
     const handleCreateRoom = useCallback(async (questions: Question[]) => {
+        if (!storage) return;
         setLoading(true);
         setError('');
         try {
@@ -43,15 +56,14 @@ const App: React.FC = () => {
                 players: {},
                 answers: [],
             };
-            // Simulate API call
-            await new Promise(res => setTimeout(res, 500));
+            await storage.setItem(pin, newRoom);
             setRoom(newRoom);
         } catch (e) {
             setError('Failed to create room.');
         } finally {
             setLoading(false);
         }
-    }, [currentUser]);
+    }, [currentUser, storage]);
 
     const handleJoinRoom = useCallback(async (pin: string) => {
         setLoading(true);
@@ -131,6 +143,14 @@ const App: React.FC = () => {
 
     // --- RENDER LOGIC ---
     const renderContent = () => {
+        if (storageError) {
+            return <div className="flex items-center justify-center h-screen text-red-400">{storageError}</div>;
+        }
+
+        if (!storage) {
+            return <div className="flex items-center justify-center h-screen"><Spinner /></div>;
+        }
+
         if (loading) {
             return <div className="flex items-center justify-center h-screen"><Spinner /></div>;
         }

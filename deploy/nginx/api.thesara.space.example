@@ -1,0 +1,76 @@
+# Example Nginx config for https://api.thesara.space
+# Copy to /etc/nginx/sites-available/api.thesara.space and symlink from sites-enabled.
+
+map $http_origin $thesara_cors {
+  default "";
+  ~^https?://(thesara\.space|www\.thesara\.space)$ $http_origin;
+}
+
+server {
+  listen 443 ssl http2;
+  server_name api.thesara.space;
+
+  # ssl_certificate /etc/letsencrypt/live/api.thesara.space/fullchain.pem;
+  # ssl_certificate_key /etc/letsencrypt/live/api.thesara.space/privkey.pem;
+
+  # ---------- Avatar proxy (keeps CORP + credentials) ----------
+  location ^~ /api/avatar/ { rewrite ^/api/(.*)$ /$1 last; }
+
+  location ^~ /avatar/ {
+    proxy_pass http://127.0.0.1:8788$request_uri;
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_redirect off;
+
+    add_header Cross-Origin-Resource-Policy "cross-origin" always;
+    add_header Vary "Origin" always;
+    add_header Access-Control-Allow-Origin $thesara_cors always;
+    add_header Access-Control-Allow-Credentials "true" always;
+  }
+
+  # ---------- Preview assets (served directly from storage) ----------
+  location ^~ /api/previews/ { rewrite ^/api/(.*)$ /$1 last; }
+
+  location ^~ /previews/ {
+    root /srv/thesara/storage;
+    try_files $uri $uri/ =404;
+    add_header Vary "Origin" always;
+    add_header Access-Control-Allow-Origin $thesara_cors always;
+    add_header Access-Control-Allow-Credentials "true" always;
+    expires 7d;
+    access_log off;
+  }
+
+  # ---------- API (all other /api/* routes) ----------
+  location ^~ /api/ {
+    proxy_pass http://127.0.0.1:8788/; # trailing slash keeps Fastify route tree aligned
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_redirect off;
+  }
+
+  # ---------- Fallback (health + diagnostics) ----------
+  location / {
+    proxy_pass http://127.0.0.1:8788;
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_redirect off;
+  }
+}
+
+server {
+  listen 80;
+  server_name api.thesara.space;
+
+  location ^~ /.well-known/acme-challenge/ { root /var/www/html; }
+  return 301 https://$host$request_uri;
+}

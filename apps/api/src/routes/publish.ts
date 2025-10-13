@@ -39,6 +39,10 @@ interface PublishPayload {
       mediaDomains?: string[];
       domains?: string[];
     };
+    storage?: {
+      enabled?: boolean;
+    };
+    features?: string[];
   };
   inlineCode: string;
   visibility?: string;

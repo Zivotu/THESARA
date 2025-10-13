@@ -1,6 +1,6 @@
 const DEFAULT_PROD_API = 'https://api.thesara.space/api';
 
-function normalizeApiUrl(value?: string | null): string | undefined {
+export function normalizeApiUrl(value?: string | null): string | undefined {
   if (!value) return undefined;
   const trimmed = value.trim();
   if (!trimmed) return undefined;
@@ -30,7 +30,10 @@ function normalizeApiUrl(value?: string | null): string | undefined {
   return trimmed;
 }
 
-const PROD_API_BASE = normalizeApiUrl(process.env.NEXT_PUBLIC_API_URL) ?? DEFAULT_PROD_API;
+const PROD_API_ENV =
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_URL;
+
+const PROD_API_BASE = normalizeApiUrl(PROD_API_ENV) ?? DEFAULT_PROD_API;
 
 function resolveLocalApiOverride(): string | undefined {
   if (typeof window === 'undefined') return undefined;

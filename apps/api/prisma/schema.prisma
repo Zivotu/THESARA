@@ -1,0 +1,104 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Room {
+  id           String   @id @default(cuid())
+  roomCode     String   @unique
+  pinHash      String
+  tokenVersion Int      @default(1)
+  version      Int      @default(1)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  members      Member[]
+  items        Item[]
+  purchases    Purchase[]
+
+  @@index([roomCode])
+}
+
+model Member {
+  id       String   @id @default(cuid())
+  roomId   String
+  room     Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  name     String
+  role     Role     @default(MEMBER)
+  joinedAt DateTime @default(now())
+
+  @@index([roomId])
+}
+
+enum Role {
+  OWNER
+  MEMBER
+}
+
+model Item {
+  id               String   @id @default(cuid())
+  roomId           String
+  room             Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  icon             String
+  name             String
+  qty              String
+  note             String?
+  estPriceCents    Int?
+  bought           Boolean  @default(false)
+  actualPriceCents Int?
+  addedBy          String
+  addedAt          DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([roomId])
+}
+
+model Purchase {
+  id         String   @id @default(cuid())
+  roomId     String
+  room       Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  date       DateTime @default(now())
+  totalCents Int
+  by         String
+  itemsJson  Json
+
+  @@index([roomId])
+}
+
+model IdempotencyKey {
+  id        String   @id @default(cuid())
+  key       String
+  scope     String
+  response  Json?
+  createdAt DateTime @default(now())
+
+  @@unique([key, scope])
+}
+
+model RoomBridge {
+  id         String   @id @default(cuid())
+  appId      String
+  storageKey String
+  payload    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([appId, storageKey])
+}
+
+model AppStorage {
+  id        String   @id @default(cuid())
+  appId     String   @map("app_id")
+  roomId    String   @map("room_id")
+  key       String
+  value     String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([appId, roomId, key], name: "app_storage_app_room_key")
+  @@index([appId, roomId, key], name: "app_storage_lookup_idx")
+  @@map("app_storage")
+}

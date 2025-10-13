@@ -1,10 +1,8 @@
 import path from 'node:path';
-import { getConfig } from './config.js';
+import { BUNDLE_DIR, PREVIEW_DIR } from './config.js';
 
-const config = getConfig();
-export const BUNDLE_ROOT = config.BUNDLE_STORAGE_PATH;
-
-export const PREVIEW_ROOT = config.PREVIEW_STORAGE_PATH;
+export const BUNDLE_ROOT = BUNDLE_DIR;
+export const PREVIEW_ROOT = PREVIEW_DIR;
 
 export const getBuildDir = (id: string) =>
   path.join(BUNDLE_ROOT, 'builds', id);

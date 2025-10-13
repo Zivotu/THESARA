@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 9 6">
+  <rect width="9" height="2" y="0" fill="#FF0000"/>
+  <rect width="9" height="2" y="2" fill="#FFFFFF"/>
+  <rect width="9" height="2" y="4" fill="#171796"/>
+  <!-- simple stylized checkerboard shield -->
+  <g transform="translate(4.25,1.25) scale(0.4)">
+    <rect width="4" height="4" x="-2" y="-1.2" fill="#FFF" stroke="#C00" stroke-width="0.3"/>
+    <rect width="1" height="1" x="-2" y="-1.2" fill="#C00"/>
+    <rect width="1" height="1" x="0" y="-1.2" fill="#C00"/>
+    <rect width="1" height="1" x="-1" y="-0.2" fill="#C00"/>
+    <rect width="1" height="1" x="1" y="-0.2" fill="#C00"/>
+    <rect width="1" height="1" x="-2" y="0.8" fill="#C00"/>
+    <rect width="1" height="1" x="0" y="0.8" fill="#C00"/>
+  </g>
+</svg>
+

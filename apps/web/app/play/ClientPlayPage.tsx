@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { apiFetch, ApiError } from '@/lib/api';
 import { API_URL } from '@/lib/config';
@@ -18,6 +18,21 @@ type ListingResponse = {
 
 const IFRAME_SANDBOX = 'allow-scripts allow-same-origin allow-forms';
 
+const IMPORT_MAP = `
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18",
+    "react/jsx-dev-runtime": "https://esm.sh/react@18/jsx-dev-runtime",
+    "react-dom": "https://esm.sh/react-dom@18",
+    "react-dom/client": "https://esm.sh/react-dom@18/client",
+    "framer-motion": "https://esm.sh/framer-motion@10",
+    "recharts": "https://esm.sh/recharts@2"
+  }
+}
+</script>
+`;
+
 export default function ClientPlayPage({ appId }: { appId: string }) {
   const searchParams = useSafeSearchParams();
   const run = useMemo(
@@ -33,7 +48,51 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
   const [state, setState] = useState<string | null>(null);
   const [networkPolicy, setNetworkPolicy] = useState<string | undefined>();
   const [networkDomains, setNetworkDomains] = useState<string[]>([]);
-  const [iframeSrc, setIframeSrc] = useState<string | null>(null);
+  const [appUrl, setAppUrl] = useState<string | null>(null);
+  const [iframeHtml, setIframeHtml] = useState<string | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+
+  const storageClient = useMemo(() => {
+    if (!token) return null;
+    return {
+      getItem: (roomId: string, key: string) =>
+        apiFetch(`/storage/item?roomId=${encodeURIComponent(roomId)}&key=${encodeURIComponent(key)}`, {
+          auth: true,
+          authToken: token,
+          headers: { 'X-Thesara-App-Id': appId },
+        }).then((res: any) => res?.value ?? null),
+      setItem: (roomId: string, key: string, value: string) =>
+        apiFetch('/storage/item', {
+          method: 'POST',
+          auth: true,
+          authToken: token,
+          headers: { 'X-Thesara-App-Id': appId },
+          body: { roomId, key, value },
+        }),
+      removeItem: (roomId: string, key: string) =>
+        apiFetch(`/storage/item?roomId=${encodeURIComponent(roomId)}&key=${encodeURIComponent(key)}`, {
+          method: 'DELETE',
+          auth: true,
+          authToken: token,
+          headers: { 'X-Thesara-App-Id': appId },
+        }),
+    };
+  }, [appId, token]);
+
+  const handleIframeLoad = () => {
+    const iframe = iframeRef.current;
+    if (!iframe?.contentWindow) {
+      console.error('Could not access iframe content window.');
+      setError('Failed to initialize the app environment.');
+      return;
+    }
+    // Inject the Thesara client
+    (iframe.contentWindow as any).thesara = {
+      storage: storageClient,
+      appId,
+      authToken: token,
+    };
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -50,7 +109,8 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
       setErrorCode(null);
       setBuildId(null);
       setState(null);
-      setIframeSrc(null);
+      setAppUrl(null);
+      setIframeHtml(null);
       setNetworkPolicy(undefined);
       setNetworkDomains([]);
 
@@ -62,6 +122,7 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
             setBuildId(null);
             setError('Build not found.');
           }
+          setLoading(false);
           return;
         }
         if (cancelled) return;
@@ -99,9 +160,11 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
         }
 
         if (cancelled) return;
+        // Construct the direct path to the build's root to avoid server-side redirects.
+        // The static server will automatically serve index.html from this directory.
         const qp = token ? `?token=${encodeURIComponent(token)}` : '';
-        const base = joinUrl(API_URL, `/app/${encodeURIComponent(appId)}/`);
-        setIframeSrc(`${base}${qp}`);
+        const directUrl = `/builds/${safeId}/build/index.html${qp}`;
+        setAppUrl(directUrl);
       } catch (err) {
         if (cancelled) return;
         if (err instanceof ApiError) {
@@ -110,10 +173,7 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
         } else {
           setError('Failed to load app.');
         }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        setLoading(false);
       }
     }
 
@@ -123,6 +183,62 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
       cancelled = true;
     };
   }, [appId, token]);
+
+  // Effect to fetch HTML when appUrl is ready
+  useEffect(() => {
+    if (!appUrl) {
+      // This can happen on first load before the initial effect sets the URL
+      if (!loading && !error) {
+        setError('Could not determine app URL.');
+      }
+      return;
+    }
+
+    let cancelled = false;
+
+    async function fetchHtml() {
+      try {
+        const response = await fetch(appUrl);
+        if (cancelled) return;
+
+        if (!response.ok) {
+          throw new Error(`Failed to load app content, status: ${response.status}`);
+        }
+
+        const htmlContent = await response.text();
+        if (cancelled) return;
+
+        // After redirects, the final URL is what we need for the <base> tag
+        const finalUrl = new URL(response.url);
+        // The base path must be a directory, so it must end with a '/'
+        const pathname = finalUrl.pathname;
+        const basePath = pathname.substring(0, pathname.lastIndexOf('/') + 1);
+
+        // Inject <base> tag to fix relative paths for assets (JS, CSS)
+        // and inject importmap to resolve bare specifiers.
+        const finalHtml = htmlContent.replace(
+          '<head>',
+          `<head>${IMPORT_MAP}<base href="${basePath}">`
+        );
+
+        setIframeHtml(finalHtml);
+      } catch (err: any) {
+        if (!cancelled) {
+          setError(err.message || 'Failed to fetch app HTML.');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    fetchHtml();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [appUrl]);
 
   if (loading) {
     return (
@@ -146,7 +262,7 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
     );
   }
 
-  if (!iframeSrc) {
+  if (!iframeHtml) {
     if (state && state !== 'published') {
       return (
         <div style={{ padding: 24 }}>
@@ -154,11 +270,16 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
         </div>
       );
     }
-    return (
-      <div style={{ padding: 24 }}>
-        <h1>Build not found</h1>
-      </div>
-    );
+    // Don't show "Build not found" while HTML is loading
+    if (!loading) {
+      return (
+        <div style={{ padding: 24 }}>
+          <h1>Build not found</h1>
+        </div>
+      );
+    }
+    // Otherwise, the main loading indicator is already showing
+    return null;
   }
 
   const needsConsent =
@@ -196,10 +317,11 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
 
   return (
     <iframe
-      src={iframeSrc}
+      ref={iframeRef}
+      srcDoc={iframeHtml}
+      onLoad={handleIframeLoad}
       style={{ border: 'none', width: '100%', height: '100vh' }}
       sandbox={IFRAME_SANDBOX}
     />
   );
 }
-

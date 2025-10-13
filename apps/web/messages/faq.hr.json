@@ -50,6 +50,10 @@
       {
         "q": "Mogu li naplatiti pristup aplikaciji?",
         "a": "Da. U detaljima aplikacije postavi cijenu. Korisnici s plaćenim pristupom ili PIN‑om moći će pokretati aplikaciju."
+      },
+      {
+        "q": "Kako napraviti aplikaciju za više korisnika (sobe, sesije)?",
+        "a": "Za dijeljenje podataka između korisnika, omogućite \"Thesara Storage\" pri objavi. U svom projektu koristite naš `@thesara/client` library i pozovite `initializeThesara()` na početku. Ta funkcija će vam vratiti `storage` objekt s asinkronim metodama `getItem`, `setItem` i `removeItem`. Ovo osigurava sigurnu komunikaciju s našim serverom i omogućuje kreiranje soba i sesija. U uputama za LLM navedite da koristi `await storage.getItem(...)` nakon inicijalizacije."
       }
     ]
   },
@@ -118,4 +122,3 @@
     ]
   }
 ]
-

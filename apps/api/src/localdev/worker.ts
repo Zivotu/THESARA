@@ -15,6 +15,8 @@ import { computeNextVersion } from '../lib/versioning.js';
 import { initBuild, updateBuild } from '../models/Build.js';
 import type { AppRecord } from '../types.js';
 import { writeArtifact } from '../utils/artifacts.js';
+import { transformHtmlLite } from '../lib/csp.js';
+import { detectRoomsStorageKeys } from '../lib/roomsBridge.js';
 
 type BundleMetadata = {
   name?: string;
@@ -240,15 +242,75 @@ async function rewriteIndexHtml(bundleDir: string, log: (s: string) => void): Pr
   const indexPath = path.join(bundleDir, 'index.html');
   if (!(await pathExists(indexPath))) return;
   try {
-    const html = await fsp.readFile(indexPath, 'utf8');
-    let rewritten = html
+    let html = await fsp.readFile(indexPath, 'utf8');
+    const rewritten = html
       .replace(/(src|href)\s*=\s*(['"])\/(?!\/)/gi, '$1=$2./')
       .replace(/url\(\s*(['"])\/(?!\/)/gi, 'url($1./');
-    if (!/<base\s+href=/i.test(rewritten)) {
-      rewritten = rewritten.replace(/<head(\s[^>]*)?>/i, (match) => `${match}<base href="./" />`);
-    }
     if (rewritten !== html) {
       await fsp.writeFile(indexPath, rewritten, 'utf8');
+      html = rewritten;
+    }
+
+      const cfg = getConfig();
+      if (cfg.PUBLISH_CSP_AUTOFIX !== false) {
+        const roomsAllowlist = Array.isArray(cfg.THESARA_ROOMS_KEYS)
+          ? cfg.THESARA_ROOMS_KEYS
+          : [];
+        let detectedRoomsKeys: string[] = [];
+        if (cfg.PUBLISH_ROOMS_AUTOBRIDGE && roomsAllowlist.length) {
+          detectedRoomsKeys = await detectRoomsStorageKeys(bundleDir, roomsAllowlist, log);
+          if (detectedRoomsKeys.length) {
+            log(`[rooms-bridge] detected storage keys: ${detectedRoomsKeys.join(', ')}`);
+          } else {
+            log('[rooms-bridge] no matching storage keys detected');
+          }
+        }
+        const report = await transformHtmlLite({
+          indexPath,
+          rootDir: bundleDir,
+          bundleModuleScripts: true,
+          vendorExternalResources: true,
+          vendorMaxBytes: cfg.PUBLISH_VENDOR_MAX_DOWNLOAD_BYTES,
+          vendorTimeoutMs: cfg.PUBLISH_VENDOR_TIMEOUT_MS,
+          failOnInlineHandlers: cfg.PUBLISH_CSP_AUTOFIX_STRICT,
+          autoBridgeRooms: !!cfg.PUBLISH_ROOMS_AUTOBRIDGE && detectedRoomsKeys.length > 0,
+          roomsStorageKeys: detectedRoomsKeys,
+          apiBase: cfg.PUBLIC_BASE,
+          log: (msg) => log(msg),
+        });
+      if (report.baseRemoved) {
+        log('[csp] removed <base> tag(s) from index.html');
+      }
+      if (report.inlineScripts.length) {
+        log(
+          `[csp] extracted ${report.inlineScripts.length}/${report.totalInlineScripts} inline <script> block(s)`,
+        );
+        for (const item of report.inlineScripts) {
+          log(`[csp] -> ${item.fileName} (${item.size} bytes)`);
+        }
+      }
+      if (report.vendored.length) {
+        log(`[csp] vendored ${report.vendored.length} external resource(s)`);
+        for (const res of report.vendored) {
+          log(`[csp] vendor ${res.type}: ${res.url} -> ${res.localPath} (${res.size} bytes)`);
+        }
+      }
+      if (report.inlineStyles.length) {
+        log(`[csp] inline style occurrences detected (${report.inlineStyles.length})`);
+      }
+      if (report.moduleBundle.created) {
+        log(`[csp] bundled ${report.moduleBundle.inputs} module script(s) into app.js`);
+      }
+      if (report.inlineEventHandlers.length) {
+        log(
+          `[csp] inline event handlers detected (${report.inlineEventHandlers.length}) - consider removing to satisfy strict CSP`,
+        );
+      }
+      if (report.warnings.length) {
+        report.warnings.forEach((w) => log(`[csp] warn: ${w}`));
+      }
+    } else {
+      log('[csp] auto-fix disabled (PUBLISH_CSP_AUTOFIX=0)');
     }
   } catch (err: any) {
     log(`[warn] index.html rewrite failed: ${err?.message || err}`);

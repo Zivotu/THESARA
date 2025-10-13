@@ -45,6 +45,73 @@ stripe listen --forward-to localhost:8788/billing/stripe/webhook
 
 Then run the API with `pnpm --filter @loopyway/api dev`.
 
+## Rooms V1 (shared shopping / room sync)
+
+Backend service for mini aplikacije s "sobama"/listama nalazi se u paketu `rooms/v1`.
+
+### Migracije i Prisma
+
+- Lokalne migracije (SQLite dev baza):
+
+  ```bash
+  cd apps/api
+  pnpm exec prisma db push
+  pnpm exec prisma generate
+  ```
+
+- Produkcija (Postgres/SQLite): postavi `DATABASE_URL` i pokreni `pnpm exec prisma db push` prilikom deploya.
+
+Migracije su u `prisma/migrations/` (`0001_rooms_init`).
+
+### Ključne env varijable
+
+- `DATABASE_URL` – putanja do baze (`file:./dev.db` u lokalu).
+- `JWT_SECRET` (obavezno u produkciji) – potpisivanje room session tokena.
+- `ARGON2_MEMORY_COST`, `ARGON2_TIME_COST`, `ARGON2_PARALLELISM` – parametri za hash PIN‑a (default: 4096 / 3 / 1).
+- `RATE_LIMIT_MAX` – globalni limit na room rute (default 60/min).
+- `ROOMS_POLL_INTERVAL_MS` – preporučeni polling interval (info, koristi ga SDK).
+- `ROOMS_TOKEN_TTL_SECONDS` – trajanje room JWT‑a (default 24h).
+
+Sve su dokumentirane u `.env.example`.
+
+### API rute (`/rooms/v1`)
+
+- `POST /rooms/v1` → kreira sobu (`{ roomCode, pin, name? }`), vraća `token`, `room`, `member` (owner).
+- `POST /rooms/v1/:roomCode/join` → pridruži se sobi (PIN provjera), vraća `token`, `member`.
+- `GET /rooms/v1/:roomCode` → dohvat stanja (zahtijeva `Authorization: Bearer <room-token>`). Podržava `?since=<ms>` i `?sinceVersion=<int>`.
+- `POST /rooms/v1/:roomCode/items` → dodaj stavku (zahtijeva `If-Match` trenutnog room `version` + opcionalno `x-idempotency-key`).
+- `PATCH /rooms/v1/:roomCode/items/:itemId` → izmjene / toggle kupovine (`If-Match`).
+- `DELETE /rooms/v1/:roomCode/items/:itemId` → ukloni stavku (`If-Match`).
+- `POST /rooms/v1/:roomCode/finalize` → finaliziraj kupovinu (kupljene stavke idu u povijest, `If-Match`, podržava `x-idempotency-key`).
+- `POST /rooms/v1/:roomCode/rotate-pin` → promijeni PIN (samo owner, `If-Match`).
+
+Svi mutirajući pozivi zahtijevaju `If-Match: <room.version>` (optimistička konkurentnost). Idempotentni POST‑ovi primaju `x-idempotency-key` (do 120 znakova).
+
+### JWT i sesije
+
+- Backend potpisuje per-room JWT (`app.signRoomToken`). Payload: `{ roomId, memberId, role, name?, tokenVersion }`.
+- `tokenVersion` se povećava pri `rotate-pin`, što automatski poništava stare tokene.
+
+### Metrics & docs
+
+- Prometheus: `GET /metrics` (standardni `prom-client` metrički set + httpRequestDuration/httpRequestsTotal labelirano po metodi i ruti).
+- OpenAPI/Swagger: `GET /docs` (Fastify Swagger UI s osnovnim opisima ruta i shema).
+
+### Rooms auto-bridge (publish pipeline)
+
+- `PUBLISH_ROOMS_AUTOBRIDGE=1` aktivira automatsko povezivanje aplikacija koje koriste localStorage kljuÄeve definirane u `THESARA_ROOMS_KEYS` (comma-separated lista, npr. `shopping/rooms/v1,shopping/session/v1`).
+- Publish pipeline skenira bundle (JS/HTML) i traÅ¾i navedene kljuÄeve. Kada pronaÄ‘e barem jedan:
+  - uklanja originalne lokalne `<script src="...">` entry-je i pamti njihove atribute kako bi se kasnije injektali redom,
+  - generira `thesara-rooms-config.js` s konfiguracijom (kljuÄevi, popis entry skripti, opcionalni API base),
+  - generira `thesara-rooms-bridge.js` koji poziva `/rooms/v1/bridge/load` i `/rooms/v1/bridge/save`, puni localStorage i presreÄ‡e `setItem`/`removeItem` za sinkronizaciju prema backendu,
+  - nakon inicijalnog loada ponovno injecta originalni bundle (podrÅ¾an je viÅ¡e-skriptni setup i hashirani nazivi).
+- Prije deploya **obavezno** pokrenuti `pnpm --filter @loopyway/api exec prisma db push` kako bi Prisma kreirala `RoomBridge` tablicu koju bridge rute koriste za pohranu stanja.
+
+### SSE (Phase B)
+
+- `RoomsService.emitRoomEvent(...)` je stub koji će se koristiti za SSE/WebSocket broadcast u sljedećem PR-u.
+- Trenutni klijenti trebaju polling interval (~2s) s `?sinceVersion` i `If-Match` zaglavljima.
+
 ## Creator onboarding flow
 
 Creators use **Stripe Connect Standard** accounts. Call
@@ -85,3 +152,11 @@ Notes:
 - `@fastify/multipart` is registered; uploads use `req.file()`.
 - `appId` must match `^[a-z0-9-]{1,63}$`.
 - For Docker builds locally, ensure you have built the image `thesara/buildkit:node20` (see VPS pack section) or set `DEV_BUILD_MODE=native`.
+
+### CSP auto-fix & vendorization (Phase 2)
+
+- Static fallback (`PUBLISH_STATIC_BUILDER=1`): ZIP bez `package.json` + `pnpm-lock.yaml` kopira se u `dist/` umjesto pokretanja native builda.
+- CSP transformacija (`PUBLISH_CSP_AUTOFIX`, zadano 1): uklanja `<base>`, inline `<script>` sprema u `inline-<hash>.js`, bundla `type="module"` u jedinstveni `app.js`, te vendorizira CDN skripte/stylesheetove u `vendor/<domena>/<putanja>-<hash>.js|css` (limit `PUBLISH_VENDOR_MAX_MB`, timeout `PUBLISH_VENDOR_TIMEOUT_MS`).
+- Lint izvještaj `transform_report_v1.json` evidentira inline stilove i event handlere; u strict modu (`PUBLISH_CSP_AUTOFIX_STRICT=1`) inline handleri prekidaju build.
+- Artefakti: `bundle_original.zip`, `bundle_transformed.zip`, `transform_report_v1.json`, kao i postojeći `imports_v1.json` i `manifest_v1.json`.
+- Downloader prihvaća samo http/https, ukupno do 20 MB (zadano) i 15 s timeout po resursu; svaka transformacija se logira u worker outputu radi audita.
