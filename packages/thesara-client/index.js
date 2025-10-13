@@ -26,31 +26,41 @@ function createStorageClient({ authToken, appId, apiBaseUrl = '/api' }) {
   };
 
   return {
-    async getItem(key) {
-      const response = await fetch(`${apiBaseUrl}/storage/item?key=${encodeURIComponent(key)}`, {
+    async getItem(roomId, key) {
+      const params = new URLSearchParams({
+        roomId,
+        key,
+      });
+      const response = await fetch(`${apiBaseUrl}/storage/item?${params.toString()}`, {
         headers,
       });
       if (!response.ok) {
         throw new Error(`Failed to get item: ${response.statusText}`);
       }
       const { value } = await response.json();
-      return value;
+      return value ?? null;
     },
-    async setItem(key, value) {
+    async setItem(roomId, key, value) {
+      if (typeof value !== 'string') {
+        throw new TypeError('Thesara storage setItem expects value to be a string.');
+      }
       const response = await fetch(`${apiBaseUrl}/storage/item`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ key, value }),
+        body: JSON.stringify({ roomId, key, value }),
       });
       if (!response.ok) {
         throw new Error(`Failed to set item: ${response.statusText}`);
       }
     },
-    async removeItem(key) {
-      const response = await fetch(`${apiBaseUrl}/storage/item`, {
+    async removeItem(roomId, key) {
+      const params = new URLSearchParams({
+        roomId,
+        key,
+      });
+      const response = await fetch(`${apiBaseUrl}/storage/item?${params.toString()}`, {
         method: 'DELETE',
         headers,
-        body: JSON.stringify({ key }),
       });
       if (!response.ok) {
         throw new Error(`Failed to remove item: ${response.statusText}`);
@@ -62,15 +72,18 @@ function createStorageClient({ authToken, appId, apiBaseUrl = '/api' }) {
 function createMockStorageClient() {
   // Using localStorage for persistence during development session
   return {
-    async getItem(key) {
-      const item = window.localStorage.getItem(key);
-      return item ? JSON.parse(item) : undefined;
+    async getItem(roomId, key) {
+      const item = window.localStorage.getItem(`${roomId}:${key}`);
+      return item ?? null;
     },
-    async setItem(key, value) {
-      window.localStorage.setItem(key, JSON.stringify(value));
+    async setItem(roomId, key, value) {
+      if (typeof value !== 'string') {
+        throw new TypeError('Thesara storage setItem expects value to be a string.');
+      }
+      window.localStorage.setItem(`${roomId}:${key}`, value);
     },
-    async removeItem(key) {
-      window.localStorage.removeItem(key);
+    async removeItem(roomId, key) {
+      window.localStorage.removeItem(`${roomId}:${key}`);
     },
   };
 }
