@@ -183,7 +183,19 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
 
     async function fetchHtml() {
       try {
-        const response = await fetch(appUrl);
+        const fetchWithNoStore = (url: string) => fetch(url, { cache: 'no-store' });
+
+        let response = await fetchWithNoStore(appUrl);
+        if (cancelled) return;
+        let attemptedCacheBypass = false;
+
+        while (response.status === 304 && !attemptedCacheBypass) {
+          attemptedCacheBypass = true;
+          const retryUrl = new URL(appUrl, window.location.origin);
+          retryUrl.searchParams.set('_cb', Date.now().toString());
+          response = await fetchWithNoStore(retryUrl.toString());
+          if (cancelled) return;
+        }
         if (cancelled) return;
 
         if (!response.ok) {
