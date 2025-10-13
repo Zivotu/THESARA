@@ -238,6 +238,7 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
           'react-dom': 'https://esm.sh/react-dom@18',
           'react-dom/client': 'https://esm.sh/react-dom@18/client',
           'framer-motion': 'https://esm.sh/framer-motion@10',
+          'html-to-image': 'https://esm.sh/html-to-image@1.11.11',
           recharts: 'https://esm.sh/recharts@2',
         };
 
