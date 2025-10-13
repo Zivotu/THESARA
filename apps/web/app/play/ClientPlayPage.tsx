@@ -18,21 +18,6 @@ type ListingResponse = {
 
 const IFRAME_SANDBOX = 'allow-scripts allow-same-origin allow-forms';
 
-const IMPORT_MAP = `
-<script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@18",
-    "react/jsx-dev-runtime": "https://esm.sh/react@18/jsx-dev-runtime",
-    "react-dom": "https://esm.sh/react-dom@18",
-    "react-dom/client": "https://esm.sh/react-dom@18/client",
-    "framer-motion": "https://esm.sh/framer-motion@10",
-    "recharts": "https://esm.sh/recharts@2"
-  }
-}
-</script>
-`;
-
 export default function ClientPlayPage({ appId }: { appId: string }) {
   const searchParams = useSafeSearchParams();
   const run = useMemo(
@@ -214,12 +199,59 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
         const pathname = finalUrl.pathname;
         const basePath = pathname.substring(0, pathname.lastIndexOf('/') + 1);
 
-        // Inject <base> tag to fix relative paths for assets (JS, CSS)
-        // and inject importmap to resolve bare specifiers.
-        const finalHtml = htmlContent.replace(
-          '<head>',
-          `<head>${IMPORT_MAP}<base href="${basePath}">`
+        const parser = new DOMParser();
+        const parsedDocument = parser.parseFromString(htmlContent, 'text/html');
+        const head = parsedDocument.querySelector('head');
+        if (!head) {
+          throw new Error('App HTML is missing a <head> element.');
+        }
+
+        const baseElement = head.querySelector('base') ?? parsedDocument.createElement('base');
+        baseElement.setAttribute('href', basePath);
+        if (!baseElement.parentElement) {
+          head.insertBefore(baseElement, head.firstChild);
+        }
+
+        const importMapScripts = Array.from(
+          parsedDocument.querySelectorAll<HTMLScriptElement>('script[type="importmap"]'),
         );
+
+        const additionalImports: Record<string, string> = {
+          react: 'https://esm.sh/react@18',
+          'react/jsx-dev-runtime': 'https://esm.sh/react@18/jsx-dev-runtime',
+          'react-dom': 'https://esm.sh/react-dom@18',
+          'react-dom/client': 'https://esm.sh/react-dom@18/client',
+          'framer-motion': 'https://esm.sh/framer-motion@10',
+          recharts: 'https://esm.sh/recharts@2',
+        };
+
+        let extendedExistingMap = false;
+        for (const script of importMapScripts) {
+          const content = script.textContent?.trim();
+          if (!content) continue;
+          try {
+            const parsed = JSON.parse(content);
+            if (!parsed || typeof parsed !== 'object') continue;
+            const imports = (parsed.imports ?? {}) as Record<string, string>;
+            parsed.imports = { ...imports, ...additionalImports };
+            script.textContent = `${JSON.stringify(parsed, null, 2)}\n`;
+            extendedExistingMap = true;
+            break;
+          } catch {
+            // Ignore JSON parse errors and continue to next import map
+          }
+        }
+
+        if (!extendedExistingMap) {
+          const script = parsedDocument.createElement('script');
+          script.setAttribute('type', 'importmap');
+          script.textContent = `${JSON.stringify({ imports: additionalImports }, null, 2)}\n`;
+          head.insertBefore(script, baseElement.nextSibling);
+        }
+
+        const serializedHtml = parsedDocument.documentElement?.outerHTML ?? htmlContent;
+        const hasDoctype = /^<!doctype/i.test(htmlContent);
+        const finalHtml = `${hasDoctype ? '<!DOCTYPE html>\n' : ''}${serializedHtml}`;
 
         setIframeHtml(finalHtml);
       } catch (err: any) {
