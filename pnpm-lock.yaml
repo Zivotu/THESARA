@@ -267,6 +267,8 @@ importers:
 
   packages/sdk: {}
 
+  packages/thesara-client: {}
+
 packages:
 
   '@adobe/css-tools@4.4.4':
