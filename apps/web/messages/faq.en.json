@@ -50,6 +50,10 @@
       {
         "q": "Can I charge for access?",
         "a": "Yes. Set a price in app details. Paid users or those with a PIN can play/run the app."
+      },
+      {
+        "q": "How do I build multi-user experiences (rooms, sessions)?",
+        "a": "Enable \"Thesara Storage\" when publishing. In your project use our `@thesara/client` package and call `initializeThesara()` on startup. It returns a storage object with async `getItem`, `setItem` and `removeItem` helpers. If the host injects a global `window.thesara.storage`, the SDK picks it up immediately; otherwise it falls back to the postMessage handshake."
       }
     ]
   },

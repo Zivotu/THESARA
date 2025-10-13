@@ -53,7 +53,7 @@
       },
       {
         "q": "Kako napraviti aplikaciju za više korisnika (sobe, sesije)?",
-        "a": "Za dijeljenje podataka između korisnika, omogućite \"Thesara Storage\" pri objavi. U svom projektu koristite naš `@thesara/client` library i pozovite `initializeThesara()` na početku. Ta funkcija će vam vratiti `storage` objekt s asinkronim metodama `getItem`, `setItem` i `removeItem`. Ovo osigurava sigurnu komunikaciju s našim serverom i omogućuje kreiranje soba i sesija. U uputama za LLM navedite da koristi `await storage.getItem(...)` nakon inicijalizacije."
+        "a": "Za dijeljenje podataka između korisnika, omogućite \"Thesara Storage\" pri objavi. U svom projektu koristite naš `@thesara/client` library i pozovite `initializeThesara()` na početku. Ta funkcija će vam vratiti `storage` objekt s asinkronim metodama `getItem`, `setItem` i `removeItem`. Ako host odmah injektira globalni `window.thesara.storage` s tim metodama, SDK ga automatski prepoznaje; inače se koristi postMessage handshake radi kompatibilnosti. U uputama za LLM navedite da koristi `await storage.getItem(...)` nakon inicijalizacije."
       }
     ]
   },
