@@ -1,8 +1,43 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import type { PrismaClient } from '@prisma/client';
 import { prisma } from '../prisma/client.js';
 import { getAppByIdOrSlug } from '../db.js';
 import type { AppRecord } from '../types.js';
+
+type AppStorageKey = {
+  appId: string;
+  roomId: string;
+  key: string;
+};
+
+type AppStorageRecord = AppStorageKey & {
+  id: string;
+  value: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+type AppStorageDelegate = {
+  upsert(args: {
+    where: { appId_roomId_key: AppStorageKey };
+    update: { value: string };
+    create: AppStorageKey & { value: string };
+  }): Promise<AppStorageRecord>;
+  findUnique(args: { where: { appId_roomId_key: AppStorageKey } }): Promise<AppStorageRecord | null>;
+  deleteMany(args: { where: AppStorageKey }): Promise<{ count: number }>;
+};
+
+type PrismaClientWithAppStorage = PrismaClient & { appStorage: AppStorageDelegate };
+
+function assertHasAppStorage(client: PrismaClient): asserts client is PrismaClientWithAppStorage {
+  const delegate = (client as Partial<PrismaClientWithAppStorage>).appStorage;
+  if (typeof delegate?.upsert !== 'function') {
+    throw new Error(
+      'Prisma client is missing the appStorage delegate. Did you run "pnpm --filter @loopyway/api prisma:generate"?',
+    );
+  }
+}
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -69,6 +104,9 @@ async function resolveStorageContext(
 }
 
 export default async function storageRoutes(app: FastifyInstance) {
+  assertHasAppStorage(prisma);
+  const storageClient = prisma.appStorage;
+
   app.post('/storage/item', async (req, reply) => {
     const ctx = await resolveStorageContext(req, reply);
     if (!ctx) return;
@@ -78,7 +116,7 @@ export default async function storageRoutes(app: FastifyInstance) {
     }
     const { roomId, key, value } = parsed.data;
 
-    await prisma.appStorage.upsert({
+    await storageClient.upsert({
       where: { appId_roomId_key: { appId: ctx.appId, roomId, key } },
       update: { value },
       create: { appId: ctx.appId, roomId, key, value },
@@ -97,7 +135,7 @@ export default async function storageRoutes(app: FastifyInstance) {
     }
     const { roomId, key } = parsed.data;
     const where = { appId_roomId_key: { appId: ctx.appId, roomId, key } };
-    const existing = await prisma.appStorage.findUnique({ where }).catch(() => null);
+    const existing = await storageClient.findUnique({ where }).catch(() => null);
     if (!existing) {
       return reply.code(404).send({ error: 'not_found' });
     }
@@ -112,7 +150,7 @@ export default async function storageRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: 'invalid_query', details: parsed.error.flatten() });
     }
     const { roomId, key } = parsed.data;
-    await prisma.appStorage.deleteMany({
+    await storageClient.deleteMany({
       where: { appId: ctx.appId, roomId, key },
     });
     return reply.code(204).send();
