@@ -1,7 +1,7 @@
 export interface ThesaraStorage {
-  getItem(key: string): Promise<any>;
-  setItem(key: string, value: any): Promise<void>;
-  removeItem(key: string): Promise<void>;
+  getItem(roomId: string, key: string): Promise<string | null>;
+  setItem(roomId: string, key: string, value: string): Promise<void>;
+  removeItem(roomId: string, key: string): Promise<void>;
 }
 
 export function initializeThesara(): Promise<ThesaraStorage>;
