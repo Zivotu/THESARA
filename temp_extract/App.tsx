@@ -56,7 +56,7 @@ const App: React.FC = () => {
                 players: {},
                 answers: [],
             };
-            await storage.setItem(pin, newRoom);
+            await storage.setItem(pin, 'room', JSON.stringify(newRoom));
             setRoom(newRoom);
         } catch (e) {
             setError('Failed to create room.');
@@ -66,25 +66,45 @@ const App: React.FC = () => {
     }, [currentUser, storage]);
 
     const handleJoinRoom = useCallback(async (pin: string) => {
+        if (!storage) return;
         setLoading(true);
         setError('');
-        // This is a mock join. In a real app, you'd fetch the room.
-        if (room && room.pin === pin) {
-            if (Object.keys(room.players).length >= 100) {
-                 setError('Room is full.');
-                 setLoading(false);
-                 return;
+        try {
+            const storedRoom = await storage.getItem(pin, 'room');
+            if (!storedRoom) {
+                setError('Room not found.');
+                return;
             }
-            setRoom(prev => {
-                if (!prev) return null;
-                const newPlayer: Player = { uid: currentUser.uid, displayName: currentUser.displayName, joinedAt: Date.now() };
-                return { ...prev, players: { ...prev.players, [currentUser.uid]: newPlayer } };
-            });
-        } else {
-            setError('Room not found.');
+
+            let parsedRoom: QuizRoom | null = null;
+            try {
+                parsedRoom = JSON.parse(storedRoom) as QuizRoom;
+            } catch (parseError) {
+                console.error('Failed to parse stored room.', parseError);
+                setError('Stored room data is invalid.');
+                return;
+            }
+
+            if (Object.keys(parsedRoom.players).length >= 100) {
+                setError('Room is full.');
+                return;
+            }
+
+            const newPlayer: Player = { uid: currentUser.uid, displayName: currentUser.displayName, joinedAt: Date.now() };
+            const updatedRoom: QuizRoom = {
+                ...parsedRoom,
+                players: { ...parsedRoom.players, [currentUser.uid]: newPlayer },
+            };
+
+            await storage.setItem(pin, 'room', JSON.stringify(updatedRoom));
+            setRoom(updatedRoom);
+        } catch (e) {
+            console.error(e);
+            setError('Failed to join room.');
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
-    }, [currentUser, room]);
+    }, [currentUser, storage]);
     
     const handleStartGame = useCallback(() => {
         setRoom(prev => prev ? { ...prev, status: RoomStatus.LIVE, currentIndex: 0 } : null);
