@@ -223,7 +223,18 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
         }
 
         const baseElement = head.querySelector('base') ?? parsedDocument.createElement('base');
-        baseElement.setAttribute('href', basePath);
+
+        const safeBuildId = buildId ? encodeURIComponent(buildId) : null;
+        const preferredBasePath = safeBuildId ? `/builds/${safeBuildId}/bundle/` : basePath;
+
+        let baseHref: string;
+        try {
+          baseHref = new URL(preferredBasePath, finalUrl).toString();
+        } catch {
+          baseHref = `${window.location.origin}${preferredBasePath}`;
+        }
+
+        baseElement.setAttribute('href', baseHref);
         if (!baseElement.parentElement) {
           head.insertBefore(baseElement, head.firstChild);
         }
@@ -291,7 +302,7 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [appUrl, fallbackAppUrl]);
+  }, [appUrl, fallbackAppUrl, buildId]);
 
   if (loading) {
     return (
