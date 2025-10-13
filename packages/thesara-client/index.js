@@ -34,6 +34,9 @@ function createStorageClient({ authToken, appId, apiBaseUrl = '/api' }) {
       const response = await fetch(`${apiBaseUrl}/storage/item?${params.toString()}`, {
         headers,
       });
+      if (response.status === 404) {
+        return null;
+      }
       if (!response.ok) {
         throw new Error(`Failed to get item: ${response.statusText}`);
       }
