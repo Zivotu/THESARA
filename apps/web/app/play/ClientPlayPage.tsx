@@ -34,6 +34,7 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
   const [networkPolicy, setNetworkPolicy] = useState<string | undefined>();
   const [networkDomains, setNetworkDomains] = useState<string[]>([]);
   const [appUrl, setAppUrl] = useState<string | null>(null);
+  const [fallbackAppUrl, setFallbackAppUrl] = useState<string | null>(null);
   const [iframeHtml, setIframeHtml] = useState<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
@@ -96,6 +97,7 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
       setState(null);
       setAppUrl(null);
       setIframeHtml(null);
+      setFallbackAppUrl(null);
       setNetworkPolicy(undefined);
       setNetworkDomains([]);
 
@@ -148,8 +150,10 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
         // Construct the direct path to the build's root to avoid server-side redirects.
         // The static server will automatically serve index.html from this directory.
         const qp = token ? `?token=${encodeURIComponent(token)}` : '';
-        const directUrl = `/builds/${safeId}/build/index.html${qp}`;
-        setAppUrl(directUrl);
+        const bundleUrl = `/builds/${safeId}/bundle/index.html${qp}`;
+        const legacyUrl = `/builds/${safeId}/build/index.html${qp}`;
+        setAppUrl(bundleUrl);
+        setFallbackAppUrl(legacyUrl);
       } catch (err) {
         if (cancelled) return;
         if (err instanceof ApiError) {
@@ -265,15 +269,19 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
         const hasDoctype = /^<!doctype/i.test(htmlContent);
         const finalHtml = `${hasDoctype ? '<!DOCTYPE html>\n' : ''}${serializedHtml}`;
 
+        if (cancelled) return;
+
         setIframeHtml(finalHtml);
+        setLoading(false);
       } catch (err: any) {
-        if (!cancelled) {
-          setError(err.message || 'Failed to fetch app HTML.');
+        if (cancelled) return;
+        if (fallbackAppUrl && appUrl !== fallbackAppUrl) {
+          setLoading(true);
+          setAppUrl(fallbackAppUrl);
+          return;
         }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        setError(err.message || 'Failed to fetch app HTML.');
+        setLoading(false);
       }
     }
 
@@ -282,7 +290,7 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [appUrl]);
+  }, [appUrl, fallbackAppUrl]);
 
   if (loading) {
     return (
