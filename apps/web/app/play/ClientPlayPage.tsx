@@ -246,10 +246,52 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
           baseHref = `${window.location.origin}${preferredBasePath}`;
         }
 
-        baseElement.setAttribute('href', baseHref);
+        const normalizedBaseHref = baseHref.endsWith('/') ? baseHref : `${baseHref}/`;
+
+        baseElement.setAttribute('href', normalizedBaseHref);
         if (!baseElement.parentElement) {
           head.insertBefore(baseElement, head.firstChild);
         }
+
+        const isExternalUrl = (value: string) => /^(?:[a-z][a-z0-9+.-]*:)?\/\//i.test(value);
+        const resolveBundleUrl = (value: string) => {
+          if (!value) return null;
+          const trimmed = value.trim();
+          if (!trimmed || isExternalUrl(trimmed) || !trimmed.startsWith('/')) {
+            return null;
+          }
+          const stripped = trimmed.replace(/^\/+/, '');
+          return `${normalizedBaseHref}${stripped}`;
+        };
+
+        const assetLinkRels = new Set([
+          'stylesheet',
+          'preload',
+          'modulepreload',
+          'icon',
+          'shortcut icon',
+          'apple-touch-icon',
+          'manifest',
+        ]);
+
+        parsedDocument.querySelectorAll<HTMLScriptElement>('script[src]').forEach((script) => {
+          const resolved = resolveBundleUrl(script.getAttribute('src') ?? '');
+          if (resolved) {
+            script.setAttribute('src', resolved);
+          }
+        });
+
+        parsedDocument.querySelectorAll<HTMLLinkElement>('link[href]').forEach((link) => {
+          const rel = link.getAttribute('rel');
+          const relTokens = rel?.split(/\s+/).map((token) => token.toLowerCase()).filter(Boolean) ?? [];
+          if (relTokens.length && !relTokens.some((token) => assetLinkRels.has(token))) {
+            return;
+          }
+          const resolved = resolveBundleUrl(link.getAttribute('href') ?? '');
+          if (resolved) {
+            link.setAttribute('href', resolved);
+          }
+        });
 
         const importMapScripts = Array.from(
           parsedDocument.querySelectorAll<HTMLScriptElement>('script[type="importmap"]'),
