@@ -81,12 +81,13 @@ model IdempotencyKey {
 model RoomBridge {
   id         String   @id @default(cuid())
   appId      String
+  userId     String
   storageKey String
   payload    String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  @@unique([appId, storageKey])
+  @@unique([appId, userId, storageKey])
 }
 
 model AppStorage {
