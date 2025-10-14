@@ -156,6 +156,10 @@ const routes: FastifyPluginAsync = async (app) => {
     if (!PUBLISH_ROOMS_AUTOBRIDGE) {
       return reply.code(404).send({ code: 'bridge_disabled', message: 'Rooms auto-bridge disabled' });
     }
+    const uid = request.authUser?.uid;
+    if (!uid) {
+      return reply.code(401).send({ code: 'unauthorized', message: 'Authentication required' });
+    }
     try {
       const body = bridgeLoadSchema.parse(request.body);
       if (
@@ -165,7 +169,7 @@ const routes: FastifyPluginAsync = async (app) => {
       ) {
         return reply.code(403).send({ code: 'bridge_key_not_allowed', message: 'Storage key not allowed' });
       }
-      const payload = await service.loadBridgeState(body.appId, body.key);
+      const payload = await service.loadBridgeState(body.appId, uid, body.key);
       return reply.send({ payload });
     } catch (err) {
       if (err instanceof HttpError) {
@@ -179,6 +183,10 @@ const routes: FastifyPluginAsync = async (app) => {
     if (!PUBLISH_ROOMS_AUTOBRIDGE) {
       return reply.code(404).send({ code: 'bridge_disabled', message: 'Rooms auto-bridge disabled' });
     }
+    const uid = request.authUser?.uid;
+    if (!uid) {
+      return reply.code(401).send({ code: 'unauthorized', message: 'Authentication required' });
+    }
     try {
       const body = bridgeSaveSchema.parse(request.body);
       if (
@@ -188,7 +196,7 @@ const routes: FastifyPluginAsync = async (app) => {
       ) {
         return reply.code(403).send({ code: 'bridge_key_not_allowed', message: 'Storage key not allowed' });
       }
-      await service.saveBridgeState(body.appId, body.key, body.payload ?? null);
+      await service.saveBridgeState(body.appId, uid, body.key, body.payload ?? null);
       return reply.send({ ok: true });
     } catch (err) {
       if (err instanceof HttpError) {
