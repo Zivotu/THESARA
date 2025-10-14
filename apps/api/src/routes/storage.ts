@@ -8,6 +8,7 @@ import type { AppRecord } from '../types.js';
 type AppStorageKey = {
   appId: string;
   roomId: string;
+  userId: string;
   key: string;
 };
 
@@ -18,7 +19,7 @@ type AppStorageRecord = AppStorageKey & {
   updatedAt: Date;
 };
 
-type AppStorageWhereUnique = { app_storage_app_room_key: AppStorageKey };
+type AppStorageWhereUnique = { app_storage_app_room_user_key: AppStorageKey };
 
 type AppStorageDelegate = {
   upsert(args: {
@@ -73,6 +74,8 @@ function normalizeAppHeader(header: unknown): string | null {
   return trimmed.length ? trimmed : null;
 }
 
+const LEGACY_USER_ID = '__legacy__';
+
 async function resolveStorageContext(
   req: FastifyRequest,
   reply: FastifyReply,
@@ -117,12 +120,19 @@ export default async function storageRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: 'invalid_body', details: parsed.error.flatten() });
     }
     const { roomId, key, value } = parsed.data;
+    const userId = req.storageContext!.userId;
 
     await storageClient.upsert({
-      where: { app_storage_app_room_key: { appId: ctx.appId, roomId, key } },
+      where: { app_storage_app_room_user_key: { appId: ctx.appId, roomId, userId, key } },
       update: { value },
-      create: { appId: ctx.appId, roomId, key, value },
+      create: { appId: ctx.appId, roomId, userId, key, value },
     });
+
+    if (userId !== LEGACY_USER_ID) {
+      void storageClient
+        .deleteMany({ where: { appId: ctx.appId, roomId, userId: LEGACY_USER_ID, key } })
+        .catch(() => null);
+    }
 
     // Upsert does not tell us whether it inserted or updated, so 200 OK remains correct.
     return reply.code(200).send({ ok: true });
@@ -136,8 +146,36 @@ export default async function storageRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: 'invalid_query', details: parsed.error.flatten() });
     }
     const { roomId, key } = parsed.data;
-    const where = { app_storage_app_room_key: { appId: ctx.appId, roomId, key } };
-    const existing = await storageClient.findUnique({ where }).catch(() => null);
+    const userId = req.storageContext!.userId;
+
+    const where = {
+      app_storage_app_room_user_key: { appId: ctx.appId, roomId, userId, key },
+    };
+
+    let existing = await storageClient.findUnique({ where }).catch(() => null);
+    if (!existing && userId !== LEGACY_USER_ID) {
+      const legacyWhere = {
+        app_storage_app_room_user_key: {
+          appId: ctx.appId,
+          roomId,
+          userId: LEGACY_USER_ID,
+          key,
+        },
+      };
+      const legacy = await storageClient.findUnique({ where: legacyWhere }).catch(() => null);
+      if (legacy) {
+        existing = await storageClient
+          .upsert({
+            where,
+            update: { value: legacy.value },
+            create: { appId: ctx.appId, roomId, userId, key, value: legacy.value },
+          })
+          .catch(() => null);
+        await storageClient
+          .deleteMany({ where: { appId: ctx.appId, roomId, userId: LEGACY_USER_ID, key } })
+          .catch(() => null);
+      }
+    }
     if (!existing) {
       return reply.code(404).send({ error: 'not_found' });
     }
@@ -152,9 +190,15 @@ export default async function storageRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: 'invalid_query', details: parsed.error.flatten() });
     }
     const { roomId, key } = parsed.data;
+    const userId = req.storageContext!.userId;
     await storageClient.deleteMany({
-      where: { appId: ctx.appId, roomId, key },
+      where: { appId: ctx.appId, roomId, userId, key },
     });
+    if (userId !== LEGACY_USER_ID) {
+      void storageClient
+        .deleteMany({ where: { appId: ctx.appId, roomId, userId: LEGACY_USER_ID, key } })
+        .catch(() => null);
+    }
     return reply.code(204).send();
   });
 }

@@ -94,12 +94,13 @@ model AppStorage {
   id        String   @id @default(cuid())
   appId     String   @map("app_id")
   roomId    String   @map("room_id")
+  userId    String   @map("user_id")
   key       String
   value     String
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@unique([appId, roomId, key], name: "app_storage_app_room_key")
-  @@index([appId, roomId, key], name: "app_storage_lookup_idx")
+  @@unique([appId, roomId, userId, key], name: "app_storage_app_room_user_key")
+  @@index([appId, roomId, userId, key], name: "app_storage_lookup_idx")
   @@map("app_storage")
 }
