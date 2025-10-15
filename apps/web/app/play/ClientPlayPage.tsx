@@ -263,7 +263,7 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
           head.insertBefore(baseElement, head.firstChild);
         }
 
-        const isExternalUrl = (value: string) => /^(?:[a-z][a-z0-9+.-]*:)?\/\/i.test(value);
+        const isExternalUrl = (value: string) => /^(?:[a-z][a-z0-9+.-]*:)?\/\//i.test(value);
         const resolveBundleUrl = (value: string) => {
           if (!value) return null;
           const trimmed = value.trim();
