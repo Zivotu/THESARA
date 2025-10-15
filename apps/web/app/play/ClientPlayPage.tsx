@@ -6,6 +6,7 @@ import { apiFetch, ApiError } from '@/lib/api';
 import { API_URL } from '@/lib/config';
 import { joinUrl } from '@/lib/url';
 import { useSafeSearchParams } from '@/hooks/useSafeSearchParams';
+import { signAppJwt } from '@/lib/jwt';
 
 type BuildStatusResponse = {
   state?: string;
@@ -87,10 +88,11 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
       return;
     }
     // Inject the Thesara client
+    const signedToken = token ? signAppJwt({ token }) : undefined;
     (iframe.contentWindow as any).thesara = {
       storage: storageClient,
       appId,
-      authToken: token,
+      authToken: signedToken,
     };
   };
 
