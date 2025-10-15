@@ -30,6 +30,11 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
   const token = useMemo(() => searchParams.get('token') ?? undefined, [searchParams]);
   const [effectiveToken, setEffectiveToken] = useState<string | undefined>(token ?? undefined);
 
+  const signedToken = useMemo(
+    () => (effectiveToken ? signAppJwt({ token: effectiveToken }) : undefined),
+    [effectiveToken],
+  );
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
@@ -103,7 +108,6 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
     }
     // Inject the Thesara client
     console.info('[Thesara] iframe sandbox: OFF; storage: parent->API via cookies/token');
-    const signedToken = effectiveToken ? signAppJwt({ token: effectiveToken }) : undefined;
     (iframe.contentWindow as any).thesara = {
       storage: storageClient,
       appId,
@@ -208,13 +212,15 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
     };
   }, [appId, effectiveToken]);
 
+  useEffect(() => {
+    if (!appUrl && !loading && !error) {
+      setError('Could not determine app URL.');
+    }
+  }, [appUrl, loading, error]);
+
   // Effect to fetch HTML when appUrl is ready
   useEffect(() => {
     if (!appUrl) {
-      // This can happen on first load before the initial effect sets the URL
-      if (!loading && !error) {
-        setError('Could not determine app URL.');
-      }
       return;
     }
 
@@ -280,6 +286,7 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
         }
 
         const isExternalUrl = (value: string) => /^(?:[a-z][a-z0-9+.-]*:)?\/\//i.test(value);
+
         const resolveBundleUrl = (value: string) => {
           if (!value) return null;
           const trimmed = value.trim();
@@ -365,7 +372,30 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
 
         if (cancelled) return;
 
-        setIframeHtml(finalHtml);
+        const prelude = `
+          <script>
+            (function(){
+              try {
+                var w = window;
+                w.thesara = w.thesara || {};
+                w.thesara.appId = ${JSON.stringify(appId)};
+                w.thesara.authToken = ${JSON.stringify(signedToken)};
+                w.thesara.storage = w.thesara.storage || {
+                  getItem: function(){ return Promise.reject(new Error('thesara.storage not ready')); },
+                  setItem: function(){ return Promise.reject(new Error('thesara.storage not ready')); },
+                  removeItem: function(){ return Promise.reject(new Error('thesara.storage not ready')); }
+                };
+              } catch(e) { /* no-op */ }
+            })();
+          </script>
+        `;
+
+        const withPrelude = finalHtml.replace(
+          /<head(\s*)>/i,
+          (m) => `${m}\n${prelude}`
+        );
+
+        setIframeHtml(withPrelude);
         setLoading(false);
       } catch (err: any) {
         if (cancelled) return;
@@ -384,7 +414,16 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [appUrl, fallbackAppUrl, buildId]);
+  }, [appUrl, fallbackAppUrl, buildId, signedToken, appId]);
+
+  useEffect(() => {
+    const w = iframeRef.current?.contentWindow as any;
+    if (!w) return;
+    w.thesara = w.thesara || {};
+    w.thesara.appId = appId;
+    w.thesara.authToken = signedToken;
+    w.thesara.storage = storageClient;
+  }, [appId, signedToken, storageClient]);
 
   if (loading) {
     return (
