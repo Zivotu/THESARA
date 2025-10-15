@@ -6,6 +6,7 @@ import { apiFetch, ApiError } from '@/lib/api';
 import { API_URL } from '@/lib/config';
 import { joinUrl } from '@/lib/url';
 import { useSafeSearchParams } from '@/hooks/useSafeSearchParams';
+import { signAppJwt } from '@/lib/jwt';
 
 type BuildStatusResponse = {
   state?: string;
@@ -27,6 +28,7 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
     [searchParams],
   );
   const token = useMemo(() => searchParams.get('token') ?? undefined, [searchParams]);
+  const [effectiveToken, setEffectiveToken] = useState<string | undefined>(token ?? undefined);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,10 +43,21 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
   const [iframeHtml, setIframeHtml] = useState<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
+  useEffect(() => {
+    if (!effectiveToken && appId) {
+      fetch(`/api/play/token?appId=${encodeURIComponent(appId)}`, { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error('token_fetch_failed'))))
+        .then(({ token }) => setEffectiveToken(token))
+        .catch(() => {
+          setError('Failed to fetch app token.');
+        });
+    }
+  }, [appId, effectiveToken]);
+
   const storageClient = useMemo(() => {
     const headers: Record<string, string> = { 'X-Thesara-App-Id': appId };
-    if (token) {
-      headers.Authorization = `Bearer ${token}`;
+    if (effectiveToken) {
+      headers.Authorization = `Bearer ${effectiveToken}`;
     }
 
     return {
@@ -79,7 +92,7 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
           headers,
         }),
     };
-  }, [appId, token]);
+  }, [appId, effectiveToken]);
 
   const handleIframeLoad = () => {
     const iframe = iframeRef.current;
@@ -90,10 +103,11 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
     }
     // Inject the Thesara client
     console.info('[Thesara] iframe sandbox: OFF; storage: parent->API via cookies/token');
+    const signedToken = effectiveToken ? signAppJwt({ token: effectiveToken }) : undefined;
     (iframe.contentWindow as any).thesara = {
       storage: storageClient,
       appId,
-      authToken: token,
+      authToken: signedToken,
     };
     console.info('thesara.storage injected', !!(iframe.contentWindow as any)?.thesara?.storage);
   };
@@ -170,7 +184,7 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
         if (cancelled) return;
         // Construct the direct path to the build's root to avoid server-side redirects.
         // The static server will automatically serve index.html from this directory.
-        const qp = token ? `?token=${encodeURIComponent(token)}` : '';
+        const qp = effectiveToken ? `?token=${encodeURIComponent(effectiveToken)}` : '';
         const bundleUrl = `/builds/${safeId}/bundle/index.html${qp}`;
         const legacyUrl = `/builds/${safeId}/build/index.html${qp}`;
         setAppUrl(bundleUrl);
@@ -192,7 +206,7 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [appId, token]);
+  }, [appId, effectiveToken]);
 
   // Effect to fetch HTML when appUrl is ready
   useEffect(() => {
@@ -265,7 +279,7 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
           head.insertBefore(baseElement, head.firstChild);
         }
 
-        const isExternalUrl = (value: string) => /^(?:[a-z][a-z0-9+.-]*:)?\]/i.test(value);
+        const isExternalUrl = (value: string) => /^(?:[a-z][a-z0-9+.-]*:)?\/\//i.test(value);
         const resolveBundleUrl = (value: string) => {
           if (!value) return null;
           const trimmed = value.trim();
@@ -433,7 +447,7 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
           </ul>
         )}
         <div style={{ display: 'flex', gap: 12 }}>
-          <Link href={`?run=1${token ? `&token=${encodeURIComponent(token)}` : ''}`} className="px-3 py-2 bg-emerald-600 text-white rounded">
+          <Link href={`?run=1${effectiveToken ? `&token=${encodeURIComponent(effectiveToken)}` : ''}`} className="px-3 py-2 bg-emerald-600 text-white rounded">
             Launch app
           </Link>
           <Link href="/apps" className="px-3 py-2 border rounded">
