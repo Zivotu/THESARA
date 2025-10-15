@@ -6,7 +6,6 @@ import { apiFetch, ApiError } from '@/lib/api';
 import { API_URL } from '@/lib/config';
 import { joinUrl } from '@/lib/url';
 import { useSafeSearchParams } from '@/hooks/useSafeSearchParams';
-import { signAppJwt } from '@/lib/jwt';
 
 type BuildStatusResponse = {
   state?: string;
@@ -20,8 +19,6 @@ type ListingResponse = {
 type StorageItemResponse = {
   value: string | null;
 };
-
-const IFRAME_SANDBOX = 'allow-scripts allow-same-origin allow-forms';
 
 export default function ClientPlayPage({ appId }: { appId: string }) {
   const searchParams = useSafeSearchParams();
@@ -45,7 +42,11 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
   const storageClient = useMemo(() => {
-    if (!token) return null;
+    const headers: Record<string, string> = { 'X-Thesara-App-Id': appId };
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
     return {
       getItem: async (roomId: string, key: string) => {
         try {
@@ -53,7 +54,7 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
             `/storage/item?roomId=${encodeURIComponent(roomId)}&key=${encodeURIComponent(key)}`,
             {
               auth: true,
-              headers: { 'X-Thesara-App-Id': appId, Authorization: `Bearer ${token}` },
+              headers,
             },
           );
           return res?.value ?? null;
@@ -68,14 +69,14 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
         apiFetch('/storage/item', {
           method: 'POST',
           auth: true,
-          headers: { 'X-Thesara-App-Id': appId, Authorization: `Bearer ${token}` },
+          headers,
           body: { roomId, key, value },
         }),
       removeItem: (roomId: string, key: string) =>
         apiFetch(`/storage/item?roomId=${encodeURIComponent(roomId)}&key=${encodeURIComponent(key)}`, {
           method: 'DELETE',
           auth: true,
-          headers: { 'X-Thesara-App-Id': appId, Authorization: `Bearer ${token}` },
+          headers,
         }),
     };
   }, [appId, token]);
@@ -88,12 +89,13 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
       return;
     }
     // Inject the Thesara client
-    const signedToken = token ? signAppJwt({ token }) : undefined;
+    console.info('[Thesara] iframe sandbox: OFF; storage: parent->API via cookies/token');
     (iframe.contentWindow as any).thesara = {
       storage: storageClient,
       appId,
-      authToken: signedToken,
+      authToken: token,
     };
+    console.info('thesara.storage injected', !!(iframe.contentWindow as any)?.thesara?.storage);
   };
 
   useEffect(() => {
@@ -263,7 +265,7 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
           head.insertBefore(baseElement, head.firstChild);
         }
 
-        const isExternalUrl = (value: string) => /^(?:[a-z][a-z0-9+.-]*:)?\/\//i.test(value);
+        const isExternalUrl = (value: string) => /^(?:[a-z][a-z0-9+.-]*:)?\]/i.test(value);
         const resolveBundleUrl = (value: string) => {
           if (!value) return null;
           const trimmed = value.trim();
@@ -370,11 +372,6 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
     };
   }, [appUrl, fallbackAppUrl, buildId]);
 
-  const isTrustedApp = useMemo(
-    () => app?.authorEmail === 'amir.serbic@gmail.com' || app?.owner === 'thesara',
-    [app],
-  );
-
   if (loading) {
     return (
       <div style={{ padding: 24 }}>
@@ -456,7 +453,6 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
       srcDoc={iframeHtml}
       onLoad={handleIframeLoad}
       style={{ border: 'none', width: '100%', height: '100vh' }}
-      {...(isTrustedApp ? {} : { sandbox: IFRAME_SANDBOX })}
     />
   );
 }
