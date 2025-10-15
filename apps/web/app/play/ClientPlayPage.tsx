@@ -13,7 +13,7 @@ type BuildStatusResponse = {
 };
 
 type ListingResponse = {
-  item?: { buildId?: string };
+  item?: { buildId?: string; authorEmail?: string; owner?: string };
 };
 
 type StorageItemResponse = {
@@ -34,6 +34,7 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [buildId, setBuildId] = useState<string | null>(null);
+  const [app, setApp] = useState<ListingResponse['item'] | null>(null);
   const [state, setState] = useState<string | null>(null);
   const [networkPolicy, setNetworkPolicy] = useState<string | undefined>();
   const [networkDomains, setNetworkDomains] = useState<string[]>([]);
@@ -107,6 +108,7 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
       setError(null);
       setErrorCode(null);
       setBuildId(null);
+      setApp(null);
       setState(null);
       setAppUrl(null);
       setIframeHtml(null);
@@ -116,6 +118,8 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
 
       try {
         const listing = await apiFetch<ListingResponse>(`/listing/${encodeURIComponent(appId)}`);
+        if (cancelled) return;
+        setApp(listing?.item ?? null);
         const latestBuildId = listing?.item?.buildId || null;
         if (!latestBuildId) {
           if (!cancelled) {
@@ -257,7 +261,7 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
           head.insertBefore(baseElement, head.firstChild);
         }
 
-        const isExternalUrl = (value: string) => /^(?:[a-z][a-z0-9+.-]*:)?\/\//i.test(value);
+        const isExternalUrl = (value: string) => /^(?:[a-z][a-z0-9+.-]*:)?\/\/i.test(value);
         const resolveBundleUrl = (value: string) => {
           if (!value) return null;
           const trimmed = value.trim();
@@ -320,7 +324,8 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
             if (!parsed || typeof parsed !== 'object') continue;
             const imports = (parsed.imports ?? {}) as Record<string, string>;
             parsed.imports = { ...imports, ...additionalImports };
-            script.textContent = `${JSON.stringify(parsed, null, 2)}\n`;
+            script.textContent = `${JSON.stringify(parsed, null, 2)}
+`;
             extendedExistingMap = true;
             break;
           } catch {
@@ -331,7 +336,8 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
         if (!extendedExistingMap) {
           const script = parsedDocument.createElement('script');
           script.setAttribute('type', 'importmap');
-          script.textContent = `${JSON.stringify({ imports: additionalImports }, null, 2)}\n`;
+          script.textContent = `${JSON.stringify({ imports: additionalImports }, null, 2)}
+`;
           head.insertBefore(script, baseElement.nextSibling);
         }
 
@@ -361,6 +367,11 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
       cancelled = true;
     };
   }, [appUrl, fallbackAppUrl, buildId]);
+
+  const isTrustedApp = useMemo(
+    () => app?.authorEmail === 'amir.serbic@gmail.com' || app?.owner === 'thesara',
+    [app],
+  );
 
   if (loading) {
     return (
@@ -443,7 +454,7 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
       srcDoc={iframeHtml}
       onLoad={handleIframeLoad}
       style={{ border: 'none', width: '100%', height: '100vh' }}
-      sandbox={IFRAME_SANDBOX}
+      {...(isTrustedApp ? {} : { sandbox: IFRAME_SANDBOX })}
     />
   );
 }
