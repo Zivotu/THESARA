@@ -16,6 +16,10 @@ type ListingResponse = {
   item?: { buildId?: string };
 };
 
+type StorageItemResponse = {
+  value: string | null;
+};
+
 const IFRAME_SANDBOX = 'allow-scripts allow-same-origin allow-forms';
 
 export default function ClientPlayPage({ appId }: { appId: string }) {
@@ -43,12 +47,11 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
     return {
       getItem: async (roomId: string, key: string) => {
         try {
-          const res = await apiFetch(
+          const res = await apiFetch<StorageItemResponse>(
             `/storage/item?roomId=${encodeURIComponent(roomId)}&key=${encodeURIComponent(key)}`,
             {
               auth: true,
-              authToken: token,
-              headers: { 'X-Thesara-App-Id': appId },
+              headers: { 'X-Thesara-App-Id': appId, Authorization: `Bearer ${token}` },
             },
           );
           return res?.value ?? null;
@@ -63,16 +66,14 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
         apiFetch('/storage/item', {
           method: 'POST',
           auth: true,
-          authToken: token,
-          headers: { 'X-Thesara-App-Id': appId },
+          headers: { 'X-Thesara-App-Id': appId, Authorization: `Bearer ${token}` },
           body: { roomId, key, value },
         }),
       removeItem: (roomId: string, key: string) =>
         apiFetch(`/storage/item?roomId=${encodeURIComponent(roomId)}&key=${encodeURIComponent(key)}`, {
           method: 'DELETE',
           auth: true,
-          authToken: token,
-          headers: { 'X-Thesara-App-Id': appId },
+          headers: { 'X-Thesara-App-Id': appId, Authorization: `Bearer ${token}` },
         }),
     };
   }, [appId, token]);
@@ -198,6 +199,9 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
     let cancelled = false;
 
     async function fetchHtml() {
+      if (!appUrl) {
+        return;
+      }
       try {
         const fetchWithNoStore = (url: string) => fetch(url, { cache: 'no-store' });
 

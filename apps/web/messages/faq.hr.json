@@ -76,6 +76,20 @@
     ]
   },
   {
+    "id": "ambasador-program",
+    "title": "Ambasador Program",
+    "items": [
+      {
+        "q": "Što je Ambasador program?",
+        "a": "To je naš partnerski program za kreatore i entuzijaste koji žele promovirati {site}. Kao ambasador, dobivaš jedinstveni kod koji tvojim pratiteljima daje mjesec dana besplatnog Gold plana."
+      },
+      {
+        "q": "Kako mogu postati ambasador?",
+        "a": "U postavkama svog profila pronaći ćeš opciju za prijavu. Nakon što pregledamo prijavu, dobit ćeš obavijest i svoj jedinstveni kod ako je prijava odobrena."
+      }
+    ]
+  },
+  {
     "id": "sigurnost",
     "title": "Sigurnost i sandbox",
     "items": [
