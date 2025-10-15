@@ -14,7 +14,7 @@
 
   * Web: **[https://thesara.space](https://thesara.space)** (Nginx → `127.0.0.1:3000`)
   * API: **[https://api.thesara.space](https://api.thesara.space)** (Nginx → `127.0.0.1:8788`)
-* **Procese vodi PM2**: `thesara-api` (worker se diže kroz `CREATEX_WORKER_ENABLED=true`) i `thesara-web` (vidi "PM2 konfiguracija")
+* **Procese vodi PM2**: `thesara-api` (worker se diže unutar API-ja uz `CREATEX_WORKER_ENABLED=true`) i `thesara-web` (vidi "PM2 konfiguracija")
 * **CORS**: mora dopuštati `https://thesara.space` → postavljeno u **API** i Nginx avatar proxyju.
 * **Build**: `pnpm install && pnpm -r build`; API generira `apps/api/dist/server.cjs` (tsup), Web pokreće Next na 3000.
 * **Konfiguracija**: tajne NIKAD u git. Koristi `*.template` / `*.example` i `.env.production` na serveru.
@@ -27,7 +27,7 @@
 * **Nginx** terminira TLS i proxya na interne servise.
 * **API (Fastify)** sluša na `127.0.0.1:8788`.
 * **Web (Next.js)** sluša na `127.0.0.1:3000`.
-* **Worker** se izvršava unutar API procesa preko BullMQ-a (`CREATEX_WORKER_ENABLED=true`); za ručno debugiranje postoji TSX skripta.
+* **Worker** se izvršava unutar API procesa preko BullMQ-a (aktivira se s `CREATEX_WORKER_ENABLED=true` env varijablom). Nema više zasebnog `thesara-worker` procesa.
 * **Storage**: bundle/preview direktoriji na disku; API ih servira ili Nginx ih prosljeđuje do API-ja.
 
 ### Portovi i domene
@@ -48,9 +48,9 @@
     api/                       # Fastify API
       dist/server.cjs          # build output (tsup)
       .env.production          # (nije u gitu) – tajne, konfiguracija
+      prisma/schema.prisma     # model baze podataka
     web/                       # Next.js app
       .env.production          # (nije u gitu)
-    worker/                    # (ako postoji zasebno)
   ecosystem.config.js          # PM2 (nije u gitu – koristi template)
 /srv/thesara/storage           # storage root (bundles, previews, uploads)
 /etc/nginx/sites-available     # nginx virtual host konfiguracije
@@ -130,17 +130,13 @@ module.exports = {
     {
       name: 'thesara-api',
       cwd: '/srv/thesara/app/apps/api',
-      script: 'bash',
-      args: '-c "export GOOGLE_APPLICATION_CREDENTIALS=/etc/thesara/creds/firebase-sa.json && node dist/server.cjs"',
-      env_file: '/srv/thesara/app/apps/api/.env.production',
+      script: 'node',
+      args: 'dist/server.cjs',
       env: {
         NODE_ENV: 'production',
-        PORT: '8788',
+        // Varijable se učitavaju iz .env.production, ali ovdje se mogu overrideati
         CREATEX_WORKER_ENABLED: 'true',
-        ALLOWED_ORIGINS: 'https://thesara.space,https://www.thesara.space',
-        STRIPE_SUCCESS_URL: 'https://thesara.space/billing/success',
-        STRIPE_CANCEL_URL: 'https://thesara.space/billing/cancel',
-        DOTENV_CONFIG_PATH: '/srv/thesara/app/apps/api/.env.production'
+        GOOGLE_APPLICATION_CREDENTIALS: '/etc/thesara/creds/firebase-sa.json',
       },
       max_memory_restart: '512M',
       min_uptime: '30s',
@@ -150,17 +146,13 @@ module.exports = {
       name: 'thesara-web',
       cwd: '/srv/thesara/app/apps/web',
       script: 'pnpm',
-      args: 'start',
-      env_file: '/srv/thesara/app/apps/web/.env.production',
+      args: 'start', // pnpm start će pokrenuti `next start`
       env: {
         NODE_ENV: 'production',
-        PORT: '3000'
       },
       max_memory_restart: '512M',
       min_uptime: '30s',
-      restart_delay: 5000,
-      watch: false,
-      autorestart: false
+      restart_delay: 5000
     }
   ]
 };
