@@ -11,18 +11,19 @@ import jwt from "jsonwebtoken";
  */
 export function signAppJwt(
   payload: object,
-  opts?: { expiresIn?: string | number }
+  opts?: { expiresIn?: number }
 ): string {
-  const secret = process.env.JWT_SECRET;
+  const secret = process.env.ROOMS_V1__JWT_SECRET || process.env.JWT_SECRET;
   if (!secret) {
-    throw new Error("JWT_SECRET is not defined in environment variables.");
+    throw new Error("Neither ROOMS_V1__JWT_SECRET nor JWT_SECRET is defined in environment variables.");
   }
 
   const options: jwt.SignOptions = {
+    algorithm: 'HS256',
     issuer: process.env.JWT_ISSUER,
     audience: process.env.JWT_AUDIENCE,
-    expiresIn: "2h",
-    ...opts,
+    expiresIn: 7200, // 2 hours
+    ...(opts as any),
   };
 
   return jwt.sign(payload, secret, options);

@@ -94,45 +94,16 @@ export async function createServer() {
     'env'
   );
 
+  await app.register(fastifyCors, {
+    origin: ['https://thesara.space', 'https://www.thesara.space'],
+    methods: ['GET','POST','PUT','DELETE','OPTIONS'],
+    credentials: true,
+  });
+
   await app.register(metricsPlugin);
   await app.register(jwtPlugin);
   await app.register(rateLimitPlugin);
   await app.register(swaggerPlugin);
-
-  const isProd = process.env.NODE_ENV === 'production';
-  const allowedFromEnv = (process.env.ALLOWED_ORIGINS || '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-  const prodDefaultOrigins = [
-    'https://thesara.space',
-    'https://www.thesara.space',
-  ];
-  const devFallbackOrigins = [
-    ...ALLOWED_ORIGINS,
-    'http://127.0.0.1:3000',
-  ];
-  const resolvedAllowedOrigins = allowedFromEnv.length
-    ? allowedFromEnv
-    : isProd
-    ? prodDefaultOrigins
-    : devFallbackOrigins;
-  const resolvedOriginsSet = new Set(resolvedAllowedOrigins);
-
-  await app.register(cors, {
-    origin: (origin, cb) => {
-      if (!origin) return cb(null, true);
-      cb(null, resolvedOriginsSet.has(origin));
-    },
-    credentials: true,
-    allowedHeaders: [
-      'Authorization',
-      'Content-Type',
-      'X-Thesara-App-Id',
-      'x-thesara-app-id',
-    ],
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  });
   await app.register(helmet, { contentSecurityPolicy: false, frameguard: false });
 
   // Allow being mounted behind "/api" prefix (prod) by stripping it early
@@ -515,7 +486,7 @@ export async function createServer() {
     method: ['GET', 'HEAD'],
     url: '/health',
     handler: (_req: FastifyRequest, reply: FastifyReply) =>
-      reply.send({ ok: true, ts: Date.now() }),
+      reply.send({ ok: true }),
   });
 
   // Note: legacy /api/* handler removed; supported via onRequest prefix-strip
