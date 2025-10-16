@@ -1,9 +1,7 @@
-﻿import 'dotenv/config';
+import 'dotenv/config';
 import nodemailer from 'nodemailer';
 import { getConfig } from './config.js';
-import { getApps } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import { ensureFirebaseApp } from './firebaseAdmin.js';
+import { db } from './db.js';
 
 // prvo probaj iz configa (ako postoji), a zatim fallback na .env varijable
 const cfg = (() => {
@@ -56,11 +54,6 @@ export async function notifyAdmins(subject: string, body: string): Promise<void>
   });
 }
 
-if (!getApps().length) {
-  ensureFirebaseApp();
-}
-const db = getFirestore();
-
 export async function notifyUser(uid: string, subject: string, body: string): Promise<void> {
   const miss = missingFields();
   if (miss.length) {
@@ -98,4 +91,3 @@ export async function sendEmail(to: string, subject: string, body: string): Prom
   });
   await transporter.sendMail({ from: EMAIL_FROM, to, subject, text: body });
 }
-

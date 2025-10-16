@@ -1,14 +1,6 @@
-﻿import { getApps } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import { ensureFirebaseApp } from './firebaseAdmin.js';
-import { readApps, writeApps } from './db.js';
+import { db, readApps, writeApps } from './db.js';
 import type { App } from './db.js';
 import { notifyAdmins } from './notifier.js';
-
-if (!getApps().length) {
-  ensureFirebaseApp();
-}
-const db = getFirestore();
 
 export async function logAuditEntry(entry: Record<string, any>): Promise<void> {
   await db.collection('auditLogs').add({ ...entry, at: entry.at ?? Date.now() });
@@ -51,4 +43,3 @@ export async function autobanUser(uid: string, reason: string): Promise<void> {
 }
 
 export default autobanUser;
-

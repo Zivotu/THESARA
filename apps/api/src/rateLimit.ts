@@ -1,15 +1,7 @@
-﻿import { getApps } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import { ensureFirebaseApp } from './firebaseAdmin.js';
-
+import { db } from './db.js';
 import { getConfig } from './config.js';
 
-if (!getApps().length) {
-  ensureFirebaseApp();
-}
-
 const { RATE_LIMIT } = getConfig();
-const db = getFirestore();
 const collection = RATE_LIMIT.collection || 'rate_limits';
 
 /**
@@ -19,7 +11,7 @@ const collection = RATE_LIMIT.collection || 'rate_limits';
  */
 export async function isRateLimited(key: string, ttlMs: number): Promise<boolean> {
   const now = Date.now();
-  const ref = db.collection(collection).doc(key);
+  const ref = db.collection(collection).doc(.key);
   try {
     const snap = await ref.get();
     const last = snap.exists ? ((snap.data() as any).ts as number) : 0;
@@ -37,5 +29,3 @@ export async function isRateLimited(key: string, ttlMs: number): Promise<boolean
     throw err;
   }
 }
-
-

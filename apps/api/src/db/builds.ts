@@ -1,6 +1,4 @@
-﻿import { getApps } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import { ensureFirebaseApp } from '../firebaseAdmin.js';
+import { db } from '../db.js';
 import { readIndex, readArtifact, type ArtifactIndex } from '../utils/artifacts.js';
 
 export interface StoredBuild {
@@ -10,11 +8,6 @@ export interface StoredBuild {
   createdAt: number;
 }
 
-if (!getApps().length) {
-  ensureFirebaseApp();
-}
-
-const db = getFirestore();
 const COLLECTION = 'build_records';
 const AUDIT_COLLECTION = 'build_audit';
 
@@ -70,4 +63,3 @@ export async function logBuildStart(buildId: string, userId: string): Promise<vo
     console.error('logBuildStart failed', err);
   }
 }
-

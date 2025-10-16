@@ -1,6 +1,4 @@
-﻿import { getApps } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import { ensureFirebaseApp } from './firebaseAdmin.js';
+import { db } from './db.js';
 
 export type PinSession = {
   createdAt: number;
@@ -13,11 +11,6 @@ export type PinSession = {
   played?: boolean;
 };
 
-if (!getApps().length) {
-  ensureFirebaseApp();
-}
-
-const db = getFirestore();
 const COLLECTION = 'pin_sessions';
 
 function docRef(appId: string, sessionId: string) {
@@ -109,5 +102,3 @@ export async function revokeAll(appId: string) {
   snap.forEach((doc) => batch.set(doc.ref, { revoked: true }, { merge: true }));
   await batch.commit();
 }
-
-

@@ -1,17 +1,9 @@
-﻿import { randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { EntitlementType } from '@loopyway/entitlements';
 export type { EntitlementType };
-import { getApps } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import { ensureFirebaseApp } from '../firebaseAdmin.js';
-import { upsertEntitlement, removeEntitlement } from '../db.js';
+import { db, upsertEntitlement, removeEntitlement } from '../db.js';
 import { enforceAppLimit } from '../lib/appLimit.js';
-
-if (!getApps().length) {
-  ensureFirebaseApp();
-}
-const db = getFirestore();
 
 const InputBase = z
   .object({
@@ -194,4 +186,3 @@ export async function remove(uid: string, id: string): Promise<void> {
     await enforceAppLimit(ent.userId);
   }
 }
-

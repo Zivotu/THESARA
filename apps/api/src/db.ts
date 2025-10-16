@@ -1,13 +1,40 @@
-﻿import { getApps } from 'firebase-admin/app';
-import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
+import * as admin from 'firebase-admin';
+import type { ServiceAccount } from 'firebase-admin';
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import type { CollectionReference, DocumentReference } from 'firebase-admin/firestore';
-import { ensureFirebaseApp } from './firebaseAdmin.js';
+import fs from 'fs';
 import { ARCHIVE_TTL_MS } from './lib/versioning.js';
 
 import type { AppRecord } from './types.js';
 import type { Oglas } from './models/Oglas.js';
 import type { EntitlementType } from '@loopyway/entitlements';
 export type { AppRecord } from './types.js';
+
+// Učitaj PEM iz filesystema
+const privateKey = fs.readFileSync('/etc/thesara/creds/firebase-sa.pem', 'utf8');
+
+const serviceAccount = {
+  type: 'service_account',
+  project_id: 'createx-e0ccc',
+  private_key_id: '702119a41ed8',
+  private_key: privateKey,
+  client_email: 'firebase-adminsdk-fbsvc@createx-e0ccc.iam.gserviceaccount.com',
+  client_id: '117629624514827800000',
+  auth_uri: 'https://accounts.google.com/o/oauth2/auth',
+  token_uri: 'https://oauth2.googleapis.com/token',
+  auth_provider_x509_cert_url: 'https://www.googleapis.com/oauth2/v1/certs',
+  client_x509_cert_url: 'https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc@createx-e0ccc.iam.gserviceaccount.com',
+  universe_domain: 'googleapis.com',
+};
+
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount as ServiceAccount),
+  });
+}
+
+export const db = admin.firestore();
+db.settings({ ignoreUndefinedProperties: true });
 
 export type Creator = {
   id: string;
@@ -46,13 +73,6 @@ export type Metric = {
 // entitlements/{entitlementId}
 // metrics/{appId}
 // stripe_customers/{userId}
-
-if (!getApps().length) {
-  // Ensure Firebase Admin is initialized with explicit creds if available
-  ensureFirebaseApp();
-}
-const db = getFirestore();
-db.settings({ ignoreUndefinedProperties: true });
 
 const DEFAULT_COLLECTIONS = [
   'entitlements',
@@ -727,6 +747,3 @@ async function ensureAmirSerbicCreator(): Promise<void> {
     }
   } catch {}
 }
-
-
-
