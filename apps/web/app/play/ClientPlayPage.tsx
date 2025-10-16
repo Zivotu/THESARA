@@ -6,7 +6,7 @@ import { apiFetch, ApiError } from '@/lib/api';
 import { API_URL } from '@/lib/config';
 import { joinUrl } from '@/lib/url';
 import { useSafeSearchParams } from '@/hooks/useSafeSearchParams';
-import { signAppJwt } from '@/lib/jwt';
+
 
 type BuildStatusResponse = {
   state?: string;
@@ -30,10 +30,7 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
   const token = useMemo(() => searchParams.get('token') ?? undefined, [searchParams]);
   const [effectiveToken, setEffectiveToken] = useState<string | undefined>(token ?? undefined);
 
-  const signedToken = useMemo(
-    () => (effectiveToken ? signAppJwt({ token: effectiveToken }) : undefined),
-    [effectiveToken],
-  );
+  const [signedToken, setSignedToken] = useState<string | undefined>();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -58,6 +55,32 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
         });
     }
   }, [appId, effectiveToken]);
+
+  useEffect(() => {
+    if (effectiveToken) {
+      const fetchSignedToken = async () => {
+        try {
+          const response = await fetch('/api/jwt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: effectiveToken }),
+          });
+          if (!response.ok) {
+            const errorBody = await response.json();
+            throw new Error(errorBody.error || 'Failed to fetch signed JWT');
+          }
+          const { token: newSignedToken } = await response.json();
+          setSignedToken(newSignedToken);
+        } catch (err: any) {
+          console.error('Failed to sign token:', err);
+          setError(err.message || 'Failed to prepare the application token.');
+        }
+      };
+      fetchSignedToken();
+    } else {
+      setSignedToken(undefined);
+    }
+  }, [effectiveToken]);
 
   const storageClient = useMemo(() => {
     const headers: Record<string, string> = { 'X-Thesara-App-Id': appId };

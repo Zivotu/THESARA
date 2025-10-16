@@ -436,7 +436,7 @@ export class SafePublishPipeline {
       return;
     }
     try {
-      await this.runInContainer('npm audit --audit-level=high', dir);
+      await this.runInContainer('npm i --package-lock-only --no-audit && npm audit --audit-level=high', dir);
     } catch (err: any) {
       if (err?.code === 'ENOENT') {
         this.log.warn?.('Docker runtime missing, skipping npm audit');

@@ -10,26 +10,47 @@ import type { Oglas } from './models/Oglas.js';
 import type { EntitlementType } from '@loopyway/entitlements';
 export type { AppRecord } from './types.js';
 
-// Učitaj PEM iz filesystema
-const privateKey = fs.readFileSync('/etc/thesara/creds/firebase-sa.pem', 'utf8');
+function getFirebaseCredential(): admin.credential.Credential {
+  const fromEnv = process.env.GOOGLE_APPLICATION_CREDENTIALS;
 
-const serviceAccount = {
-  type: 'service_account',
-  project_id: 'createx-e0ccc',
-  private_key_id: '702119a41ed8',
-  private_key: privateKey,
-  client_email: 'firebase-adminsdk-fbsvc@createx-e0ccc.iam.gserviceaccount.com',
-  client_id: '117629624514827800000',
-  auth_uri: 'https://accounts.google.com/o/oauth2/auth',
-  token_uri: 'https://oauth2.googleapis.com/token',
-  auth_provider_x509_cert_url: 'https://www.googleapis.com/oauth2/v1/certs',
-  client_x509_cert_url: 'https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc@createx-e0ccc.iam.gserviceaccount.com',
-  universe_domain: 'googleapis.com',
-};
+  // 1. Lokalno (i preporučeno na serveru): JSON datoteka iz env varijable
+  if (fromEnv && fs.existsSync(fromEnv)) {
+    const raw = JSON.parse(fs.readFileSync(fromEnv, 'utf8'));
+
+    // Normalizacija polja i newline znakova u privatnom ključu
+    const serviceAccount = {
+      projectId: raw.project_id || raw.projectId,
+      clientEmail: raw.client_email || raw.clientEmail,
+      privateKey: (raw.private_key || raw.privateKey || '').replace(/\\n/g, '\n'),
+    };
+
+    if (!serviceAccount.privateKey || !serviceAccount.clientEmail) {
+      throw new Error('Invalid service account JSON: missing private_key or client_email');
+    }
+    return admin.credential.cert(serviceAccount as admin.ServiceAccount);
+  }
+
+  // 2. Server (fallback): Učitavanje iz standardnih putanja
+  const jsonDefaultPath = '/etc/thesara/creds/firebase-sa.json';
+  if (fs.existsSync(jsonDefaultPath)) {
+    return admin.credential.cert(jsonDefaultPath);
+  }
+
+  const pemDefaultPath = '/etc/thesara/creds/firebase-sa.pem';
+  if (fs.existsSync(pemDefaultPath)) {
+    return admin.credential.cert({
+      projectId: 'createx-e0ccc',
+      clientEmail: 'firebase-adminsdk-fbsvc@createx-e0ccc.iam.gserviceaccount.com',
+      privateKey: fs.readFileSync(pemDefaultPath, 'utf8'),
+    });
+  }
+
+  throw new Error('No Firebase credentials found. Set GOOGLE_APPLICATION_CREDENTIALS or place firebase-sa.json/pem in /etc/thesara/creds/.');
+}
 
 if (!admin.apps.length) {
   admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount as ServiceAccount),
+    credential: getFirebaseCredential(),
   });
 }
 
@@ -670,7 +691,7 @@ export async function upsertUserSubscription(
   userId: string,
   data: SubscriptionRecord,
 ): Promise<void> {
-  const { id, ...rest } = data;
+  const { id, userId: _userId, ...rest } = data; // Destrukturiramo i userId da ne bude u 'rest'
   const col = await getSubcollection(
     (await getExistingCollection('users')).doc(userId),
     'subscriptions',

@@ -14,7 +14,6 @@ import rawBody from 'fastify-raw-body';
 import fs from 'node:fs';
 import fsSync from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { BUNDLE_ROOT, PREVIEW_ROOT } from './paths.js';
 import './shims/registerSwcHelpers.js';
 import { getConfig, ALLOWED_ORIGINS } from './config.js';
@@ -60,7 +59,7 @@ export let app: FastifyInstance;
 export async function createServer() {
   // Ensure UI stub exists for builder in both dev and dist deployments
   try {
-    const runtimeDir = path.dirname(fileURLToPath(import.meta.url));
+    const runtimeDir = __dirname;
     const builderDir = path.join(runtimeDir, 'builder');
     const dest = path.join(builderDir, 'virtual-ui.tsx');
     if (!fsSync.existsSync(dest)) {

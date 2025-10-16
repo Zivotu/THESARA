@@ -8,7 +8,12 @@ module.exports = {
       name: 'thesara-api',
       cwd: '/srv/thesara/app/apps/api',
       script: 'bash',
-      args: '-c "export GOOGLE_APPLICATION_CREDENTIALS=/etc/thesara/creds/firebase-sa.json && node dist/server.cjs"',
+      // IMPORTANT: --openssl-legacy-provider is added to the node command.
+      // This is required for Node.js v17+ to support legacy RSA keys used by Firebase/Google Auth.
+      // The project's package.json specifies "node": ">=20", so this should be correct.
+      // If your production server runs an older Node version (<17), this flag will cause a crash.
+      // In that case, remove --openssl-legacy-provider from the command.
+      args: '-c "export GOOGLE_APPLICATION_CREDENTIALS=/etc/thesara/creds/firebase-sa.json && node --openssl-legacy-provider dist/server.cjs"',
       env_file: '/srv/thesara/app/apps/api/.env.production',
       env: {
         NODE_ENV: 'production',
