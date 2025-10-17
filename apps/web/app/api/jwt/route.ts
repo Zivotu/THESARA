@@ -1,33 +1,40 @@
-// PATCH PROMPT: Fix JWT signing route in Next.js (apps/web/app/api/jwt/route.ts)
-// Context: Currently returns "Invalid payload" because it expects { token }.
-// Goal: Make this route generate a signed JWT token from provided JSON (e.g. { userId, role }).
-
+// apps/web/app/api/jwt/route.ts
+import { NextResponse } from 'next/server'
 import jwt from 'jsonwebtoken'
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json()
+    const data = await req.json()
+    const userId = data?.userId
+    const role = data?.role ?? 'user'
 
-    // Allow any object (userId optional)
-    const payload =
-      typeof body === 'object' && body !== null ? body : { anon: true }
-
-    // Validate secret
-    const secret = process.env.JWT_SECRET
-    if (!secret) {
-      return Response.json({ ok: false, error: 'Missing JWT_SECRET' }, { status: 500 })
+    if (!userId) {
+      return NextResponse.json(
+        { ok: false, error: 'Missing userId in request body' },
+        { status: 400 }
+      )
     }
 
-    // Sign a new JWT (HS256)
-    const token = jwt.sign(payload, secret, {
-      algorithm: 'HS256',
-      expiresIn: '15m',
-      issuer: 'thesara-web',
-    })
+    const secret = process.env.JWT_SECRET
+    if (!secret) {
+      return NextResponse.json(
+        { ok: false, error: 'JWT_SECRET not configured' },
+        { status: 500 }
+      )
+    }
 
-    return Response.json({ ok: true, token })
+    const token = jwt.sign(
+      { sub: userId, role, iss: 'thesara-web' },
+      secret,
+      { algorithm: 'HS256', expiresIn: '15m' }
+    )
+
+    return NextResponse.json({ ok: true, token })
   } catch (err: any) {
-    console.error('JWT signing failed:', err)
-    return Response.json({ ok: false, error: err.message || 'Failed to sign token' }, { status: 400 })
+    console.error('JWT sign error:', err)
+    return NextResponse.json(
+      { ok: false, error: err.message || 'Failed to sign token' },
+      { status: 500 }
+    )
   }
 }
