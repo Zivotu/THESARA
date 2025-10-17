@@ -2,7 +2,6 @@ import { readArtifact, hasArtifact } from './utils/artifacts.js';
 import Ajv from 'ajv';
 import { normalizeLlmReport, type LlmWrapper } from './lib/llm.js';
 import { AppError } from './lib/errors.js';
-import { fileURLToPath } from 'node:url';
 
 const {
   OPENAI_API_KEY,
@@ -210,7 +209,7 @@ export async function runLlmReviewForBuild(
 
 // Only run the CLI when explicitly opted in via env to avoid
 // accidental execution in bundled server builds.
-if (process.env.LLM_CLI === '1' && process.argv[1] === fileURLToPath(import.meta.url)) {
+if (process.env.LLM_CLI === '1' && process.argv[1] === __filename) {
   const id = process.argv[2];
   if (!id) {
     console.error('Usage: node llmReview.js <buildId>');

@@ -11,7 +11,7 @@ export type TailwindBuildOpts = {
   preflight?: boolean;       // default false — koristimo vlastite resetove
 };
 
-const require = createRequire(import.meta.url);
+
 
 export async function buildTailwindCSS(opts: TailwindBuildOpts) {
   const { bundleJsPath, outCssPath, safelist = [], preflight = false } = opts;

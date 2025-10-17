@@ -16,6 +16,7 @@ import { zipDirectoryToBuffer } from './lib/zip.js';
 import { updateBuild } from './models/Build.js';
 import { transformHtmlLite } from './lib/csp.js';
 import { detectRoomsStorageKeys } from './lib/roomsBridge.js';
+import PDFDocument from 'pdfkit';
 
 const exec = promisify(execCb);
 
@@ -199,7 +200,7 @@ export class SafePublishPipeline {
         this.log.info({ id: appId }, 'upload:start');
         await this.uploader.uploadDir(dir, appId);
         this.log.info({ id: appId }, 'upload:done');
-        return { status: 'pending-review', issues: [] };
+        return { status: 'pending-review', reasons: [], issues: [] };
       }
       await this.llmTriage(dir, OPENAI_API_KEY);
       try {
@@ -553,10 +554,9 @@ export class SafePublishPipeline {
 
     try {
       const files = this.listFiles(dir);
-      const PDFDocument = (await import('pdfkit')).default as any;
       const doc = new PDFDocument();
       const buffers: Buffer[] = [];
-      doc.on('data', (b) => buffers.push(b));
+      doc.on('data', (b: Buffer) => buffers.push(b));
       const pdfPromise = new Promise<Buffer>((resolve) =>
         doc.on('end', () => resolve(Buffer.concat(buffers)))
       );
@@ -590,7 +590,7 @@ export class SafePublishPipeline {
           }`,
         );
       }
-      const fileJson = await fileRes.json();
+      const fileJson = (await fileRes.json()) as Record<string, any>;
       const file = fileJson.id;
       if (!file) {
         throw new Error('LLM triage failed: missing file id from upload response');

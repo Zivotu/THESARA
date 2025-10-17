@@ -21,7 +21,7 @@ import {
 import { SafePublishPipeline } from './safePublish.js';
 import { saveBuildData } from './db/builds.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 const { CDN_ALLOW, CDN_PIN, CDN_BASE, EXTERNAL_HTTP_ESM, ALLOW_ANY_NPM } = getConfig() as any;
 
 interface Job {

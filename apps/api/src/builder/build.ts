@@ -20,11 +20,7 @@ export type Opts = CdnOpts;
 
 const sha1 = (s: string) => crypto.createHash("sha1").update(s).digest("hex");
 const ensureDir = async (dir: string) => fs.mkdir(dir, { recursive: true });
-const require = createRequire(import.meta.url);
-const DIRNAME =
-  typeof __dirname === "undefined"
-    ? path.dirname(new URL(".", import.meta.url).pathname)
-    : __dirname;
+const DIRNAME = __dirname;
 
 function makeVirtualEntry(userEntryUrl: string): string {
   return `import * as __mod from ${JSON.stringify(userEntryUrl)};
@@ -484,4 +480,3 @@ export async function buildFromReact(
     return { ok: false, error: fullMsg };
   }
 }
-
