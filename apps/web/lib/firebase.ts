@@ -1,24 +1,30 @@
-'use client';
+// apps/web/lib/firebase.ts
+/**
+ * Firebase client initialization (stable singleton)
+ * -------------------------------------------------
+ * ✓ Prevents duplicate initialization in Next.js hot reload
+ * ✓ Exports app, db, auth, and storage if needed
+ */
 
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
-import { getConfig } from './config';
+import { initializeApp, getApps, getApp } from 'firebase/app'
+import { getFirestore } from 'firebase/firestore'
+import { getAuth } from 'firebase/auth'
+import { getStorage } from 'firebase/storage'
 
-const cfg = getConfig();
-
-let app: ReturnType<typeof initializeApp> | undefined;
-
-if (cfg) {
-  app = getApps().length ? getApp() : initializeApp(cfg.firebase);
-} else {
-  console.error(
-    'Missing Firebase configuration. Skipping Firebase initialization. Set NEXT_PUBLIC_FIREBASE_* env vars.',
-  );
+// your environment-configured Firebase project
+const firebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN!,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET!,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID!,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID!,
 }
 
-export const auth = app ? getAuth(app) : null;
-if (auth) setPersistence(auth, browserLocalPersistence).catch(() => {});
-export const db = app ? getFirestore(app) : null;
-export const storage = app ? getStorage(app) : null;
+// ensure we don’t initialize multiple times in Next.js environment
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp()
+
+export const db = getFirestore(app)
+export const auth = getAuth(app)
+export const storage = getStorage(app)
+export default app
