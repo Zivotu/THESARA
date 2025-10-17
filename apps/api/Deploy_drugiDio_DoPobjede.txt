@@ -1,0 +1,485 @@
+# THESARA – Operativna dokumentacija
+
+> **Namjena**: Sažeti, ali detaljni priručnik za razvoj, deploy i održavanje sustava THESARA. Sadrži arhitekturu, aktualne postavke, checkliste, te kronologiju problema koje smo imali i *točno* kako smo ih riješili.
+
+---
+
+## 0) Arhitektura i topologija
+
+* **Web (Next.js, `apps/web`)** – sluša na `127.0.0.1:3000` (PM2 proces: `thesara-web`).
+* **API (Fastify/Node, `apps/api`)** – sluša na `127.0.0.1:8788` (PM2 proces: `thesara-api`).
+* **Nginx** – reverzni proxy:
+
+  * `thesara.space` → **web** (`127.0.0.1:3000`)
+  * `api.thesara.space` (i/ili `thesaraspace.plusvps.com`) → **API** (`127.0.0.1:8788`)
+  * **Iznimke**: određene Next rute (npr. `/api/jwt`, `/api/play/token`) moraju ići **na web** (3000), *ne* na API.
+* **Konfiguracije i tajne**
+
+  * API `.env.production`: `/srv/thesara/app/apps/api/.env.production`
+  * WEB `.env.production`: `/srv/thesara/app/apps/web/.env.production`
+  * Firebase Service Account JSON: `/etc/thesara/creds/firebase-sa.json`
+  * PM2 učitava `.env.production` putem `-r dotenv/config` i `DOTENV_CONFIG_PATH`.
+
+> Verzije (zabilježeno u logovima u trenutku pisanja): Node.js `v20.19.5`, Next.js `15.5.4`, Nginx `1.24.0`.
+
+---
+
+## 1) PM2 i start aplikacija
+
+### 1.1 `ecosystem.config.cjs` (izrezak)
+
+```js
+module.exports = {
+  apps: [
+    {
+      name: 'thesara-api',
+      cwd: '/srv/thesara/app/apps/api',
+      script: 'node',
+      args: '-r dotenv/config dist/server.cjs',
+      instances: 1,
+      exec_mode: 'fork',
+      env: {
+        NODE_ENV: 'production',
+        PORT: 8788,
+        DOTENV_CONFIG_PATH: '/srv/thesara/app/apps/api/.env.production'
+      },
+      env_production: {
+        NODE_ENV: 'production',
+        PORT: 8788,
+        DOTENV_CONFIG_PATH: '/srv/thesara/app/apps/api/.env.production'
+      }
+    },
+    {
+      name: 'thesara-web',
+      cwd: '/srv/thesara/app/apps/web',
+      script: 'pnpm',
+      args: 'start',
+      env: { NODE_ENV: 'production', PORT: 3000 },
+      env_production: { NODE_ENV: 'production', PORT: 3000 }
+    }
+  ]
+}
+```
+
+### 1.2 Operativne komande
+
+```bash
+# čisto pokretanje
+pm2 delete all
+pm2 start /srv/thesara/app/ecosystem.config.cjs
+pm2 save
+
+# status i logovi
+pm2 status
+pm2 logs thesara-api --lines 100
+pm2 logs thesara-web --lines 100
+
+# restart s novim env varijablama
+pm2 restart thesara-api --update-env
+pm2 restart thesara-web --update-env
+```
+
+---
+
+## 2) Nginx – routing i iznimke
+
+**Zašto iznimke?** `/api/jwt` (i npr. `/api/play/token`) su **Next** (web) rute koje potpisuju JWT na **web** serveru. Ako Nginx sve `/api/*` šalje na API, Next ih nikad ne vidi, pa dolaze 404/500.
+
+### 2.1 Primjer iznimki
+
+```nginx
+# Vhost za thesara.space, unutar server { ... }
+# EXACT-MATCH za Next rute – idu na :3000 (ne na API)
+location = /api/jwt {
+    proxy_pass http://127.0.0.1:3000/api/jwt;
+    proxy_http_version 1.1;
+    proxy_set_header Host               thesara.space;
+    proxy_set_header X-Real-IP          $remote_addr;
+    proxy_set_header X-Forwarded-For    $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto  $scheme;
+    proxy_read_timeout 60;
+}
+
+# Po potrebi dodati druge Next server‑side rute
+# location = /api/play/token { ...3000... }
+
+# Test i reload
+# sudo nginx -t && sudo systemctl reload nginx
+```
+
+*Alternativa*: promijeniti prefiks Next ruta u npr. `/web-api/*` i dodati jedan `location ^~ /web-api/ { proxy_pass http://127.0.0.1:3000; ... }`.
+
+---
+
+## 3) JWT podsustav
+
+### 3.1 Potpisivanje tokena – **server only** (Next API ruta)
+
+* Ruta: `apps/web/app/api/jwt/route.ts`
+* Ulaz (JSON): `{ userId: string, role?: string }`
+* Izlaz: `{ ok: true, token: string }` ili `{ ok: false, error: string }`
+* Algoritam: **HS256**
+* Tajna: `JWT_SECRET` (mora biti **identična** u WEB i API `.env.production`)
+* TTL: trenutno `15m`
+
+**Test lokalno (na serveru):**
+
+```bash
+curl -s http://127.0.0.1:3000/api/jwt -X POST \
+  -H 'content-type: application/json' \
+  -d '{"userId":"debug","role":"admin"}' | jq .
+```
+
+Očekivano:
+
+```json
+{ "ok": true, "token": "eyJ..." }
+```
+
+### 3.2 Verifikacija tokena – **API**
+
+* API koristi **istu tajnu** `JWT_SECRET` i očekuje HS256.
+* Tipične greške i uzroci:
+
+  * `Invalid or expired token` → različiti `JWT_SECRET` na webu i API‑ju; prekratak TTL; clock skew.
+  * `Failed to sign token: Missing userId in request body` → klijent ne šalje `userId` (npr. `ClientPlayPage` mora slati `auth.currentUser.uid`).
+
+### 3.3 Sanity check tajni
+
+```bash
+# pokaži vrijednosti koje PM2 proces stvarno vidi
+pm2 env $(pm2 list | awk '/thesara-api/{print $2}') | egrep 'DOTENV|JWT_SECRET|NODE_ENV|PORT'
+
+# uskladi tajnu u oba env-a (jedna linija po fajlu!)
+SECRET=$(openssl rand -hex 32)
+sudo sed -i '/^JWT_SECRET=/d' /srv/thesara/app/apps/api/.env.production
+sudo sed -i '/^JWT_SECRET=/d' /srv/thesara/app/apps/web/.env.production
+echo "JWT_SECRET=$SECRET" | sudo tee -a /srv/thesara/app/apps/api/.env.production -a /srv/thesara/app/apps/web/.env.production
+pm2 restart thesara-api --update-env
+pm2 restart thesara-web --update-env
+```
+
+### 3.4 Clock skew / vrijeme
+
+```bash
+# provjera vremena
+date -u
+curl -sI https://google.com | grep -i ^date:
+# ako drift > ~60s, omogućiti NTP
+sudo timedatectl set-ntp true || sudo apt -y install chrony && sudo systemctl enable --now chrony
+```
+
+---
+
+## 4) Firebase / Google – SA JSON, klijentski SDK i Firestore
+
+### 4.1 Service Account JSON (za API / administrativni pristup)
+
+* Lokacija: `/etc/thesara/creds/firebase-sa.json`
+* Env var: `GOOGLE_APPLICATION_CREDENTIALS=/etc/thesara/creds/firebase-sa.json` (u **API** `.env.production`)
+* **Čest problem**: oštećen JSON (dupli `-----BEGIN/END PRIVATE KEY-----`, krivi linebreakovi). Simptomi:
+
+  * `SyntaxError: Expected ',' or '}' after property value in JSON ...`
+  * `FirebaseAppError: Failed to parse private key: Invalid PEM formatted message`
+  * `error:1E08010C:DECODER routines::unsupported`
+
+**Fix (sažetak):**
+
+```bash
+# validacija JSON-a
+sudo jq -e . /etc/thesara/creds/firebase-sa.json && echo OK || echo BROKEN
+
+# ako je dupli BEGIN/END unutar private_key stringa – ukloniti duplikate
+sudo sed -i \
+  -e 's/-----BEGIN PRIVATE KEY-----\n-----BEGIN PRIVATE KEY-----/-----BEGIN PRIVATE KEY-----\n/' \
+  -e 's/-----END PRIVATE KEY-----\n-----END PRIVATE KEY-----/-----END PRIVATE KEY-----\n/' \
+  /etc/thesara/creds/firebase-sa.json
+
+# perms
+sudo chown root:root /etc/thesara/creds/firebase-sa.json
+sudo chmod 600 /etc/thesara/creds/firebase-sa.json
+
+# provjera i restart API-ja
+pm2 restart thesara-api --update-env
+pm2 logs thesara-api --lines 60
+```
+
+### 4.2 Klijentski Firebase SDK (Next web)
+
+**Singleton** (sprječava dvostruku inicijalizaciju u Next okruženju)
+
+`apps/web/lib/firebase.ts`:
+
+```ts
+import { initializeApp, getApps, getApp } from 'firebase/app'
+import { getFirestore } from 'firebase/firestore'
+import { getAuth } from 'firebase/auth'
+import { getStorage } from 'firebase/storage'
+
+const firebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN!,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET!,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID!,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID!,
+}
+
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp()
+export const db = getFirestore(app)
+export const auth = getAuth(app)
+export const storage = getStorage(app)
+export default app
+```
+
+### 4.3 Kreiranje korisničkog dokumenta na loginu (`ensureUserDoc`)
+
+* Lokacija: `apps/web/lib/ensureUserDoc.ts`
+* Poziva se iz `apps/web/app/login/page.tsx` nakon uspješne prijave.
+* Ako korisnički dokument ne postoji, kreira se u kolekciji `users` s poljima:
+
+  * `uid`, `email`, `displayName`, `photoURL`, `createdAt`, **`username`** itd.
+  * `username` se derivira iz dijela e‑pošte prije `@`: `user.email?.split('@')[0] ?? null`
+
+> **Napomena**: Trenutno `UserProfile` ruta koristi **ID dokumenta** `users/{username}`. Paziti da korisnička imena (docID) ne sadrže `/` i slične nedopuštene znakove. Alternativno, može se koristiti `users/{uid}` + sekundarni indeks/field `username` i query po `username`.
+
+---
+
+## 5) Korisnički profili – `/u/[username]`
+
+### 5.1 Struktura stranice
+
+Zbog tipova i ESLint pravila u Next 15, komponentu smo podijelili na **server** i **client**:
+
+* `apps/web/app/u/[username]/page.tsx` (server komponenta):
+
+```ts
+import UserProfileClient from './UserProfileClient'
+
+export default function UserProfilePage({ params }: { params: { username: string } }) {
+  return <UserProfileClient username={params.username} />
+}
+```
+
+* `apps/web/app/u/[username]/UserProfileClient.tsx` (client komponenta):
+
+```ts
+'use client'
+import React, { useEffect, useState } from 'react'
+import { doc, getDoc } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
+import Image from 'next/image'
+import Link from 'next/link'
+
+export default function UserProfileClient({ username }: { username: string }) {
+  const [user, setUser] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const ref = doc(db, 'users', username)
+        const snap = await getDoc(ref)
+        if (snap.exists()) setUser(snap.data())
+      } catch (err) {
+        console.error('Error fetching user:', err)
+      } finally {
+        setLoading(false)
+      }
+    })()
+  }, [username])
+
+  if (loading) return <div className="flex items-center justify-center min-h-screen text-gray-500">Loading profile...</div>
+
+  if (!user) return (
+    <div className="flex flex-col items-center justify-center min-h-screen text-center">
+      <h1 className="text-3xl font-bold mb-2">User not found</h1>
+      <p className="text-gray-500 mb-4">No profile for @{username}</p>
+      <Link href="/" className="text-blue-600 underline">← Back to home</Link>
+    </div>
+  )
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen p-8 text-center">
+      {user.photoURL && (
+        <Image src={user.photoURL} alt={user.displayName || username} width={120} height={120} className="rounded-full shadow mb-4" />
+      )}
+      <h1 className="text-3xl font-bold mb-1">{user.displayName || username}</h1>
+      <p className="text-gray-600 mb-4">@{username}</p>
+      {user.bio && <p className="text-gray-700 max-w-md">{user.bio}</p>}
+    </div>
+  )
+}
+```
+
+### 5.2 Build i tipične pogreške
+
+* `Type error: Type '{ params: { username: string; }; }' does not satisfy ...` → rješeno prebacivanjem async logike u client komponentu i eksplicitnom tipizacijom `params`.
+* ESLint: `@next/next/no-async-client-component` → rješeno: client komponenta **nije async**, async rad u `useEffect`.
+
+### 5.3 Deploy i provjera
+
+```bash
+cd /srv/thesara/app
+git pull --ff-only
+pnpm -C apps/web build
+pm2 restart thesara-web --update-env
+
+# smoke test (RSC upit)
+curl -i "http://127.0.0.1:3000/u/amir.serbic?_rsc=1" | head
+```
+
+---
+
+## 6) Incidenti i rješenja (kronologija)
+
+### 6.1 `invalid 'instanceof' operand KeyObject` u pregledniku
+
+* **Simptom**: pukne na klijentu pri JWT potpisivanju (`jsonwebtoken/sign.js`).
+* **Uzrok**: potpisivanje JWT-a izvođeno u **klijentskoj** komponenti; `KeyObject` postoji samo u Node okruženju.
+* **Rješenje**: premjestiti potpisivanje u **Next server route** `/api/jwt` (web). Klijent šalje POST, ne potpisuje.
+* **Posljedica**: Nginx iznimke – `/api/jwt` mora ići na web (`3000`).
+
+### 6.2 `Error: JWT_SECRET is required to issue room session tokens.` (API)
+
+* **Uzrok**: `JWT_SECRET` (i često `ROOMS_V1__JWT_SECRET`) nije učitan u runtime.
+* **Rješenje**:
+
+  1. Dodati u `apps/api/.env.production` i (ako treba) `apps/web/.env.production`.
+  2. Osigurati da PM2 učitava env: `-r dotenv/config` i `DOTENV_CONFIG_PATH`.
+  3. `pm2 restart thesara-api --update-env`
+
+### 6.3 Firebase SA JSON – `Invalid PEM formatted message` / `DECODER routines::unsupported` / JSON parse error
+
+* **Uzrok**: oštećen `firebase-sa.json` (dupli `BEGIN/END`, krivi linebreakovi).
+* **Rješenje**: validirati `jq`‑om, ukloniti duplikate, osigurati permise, postaviti `GOOGLE_APPLICATION_CREDENTIALS` u **API** env‑u, restart.
+
+### 6.4 404/500 na `POST /api/jwt`
+
+* **Uzrok A**: Nginx šalje `/api/*` na API – Next rute nisu dostupne.
+* **Rješenje**: iznimke za `/api/jwt` (→ web na :3000).
+* **Uzrok B**: API servis ne podignut zbog tajni/SA JSON – kaskadni 404.
+
+### 6.5 PM2 traži `dist/server.js` umjesto `.cjs`
+
+* **Rješenje**: koristiti `dist/server.cjs` u `ecosystem.config.cjs`.
+
+### 6.6 `Unable to load app / Invalid or expired token`
+
+* **Uzrok**: mismatch `JWT_SECRET` (web vs API), prekratak TTL, ili klijent nije slao `userId`.
+* **Rješenje**:
+
+  * unificirati `JWT_SECRET` (
+    sed/tee skripta iz pogl. 3.3),
+  * provjeriti clock,
+  * u `ClientPlayPage` slati `{ userId: auth.currentUser.uid, role }`.
+
+### 6.7 502 Bad Gateway (Nginx)
+
+* **Najčešći uzrok**: `thesara-web` nema gotov build (`.next/` nedostaje); PM2 javlja:
+  `Could not find a production build in the '.next' directory...`
+* **Rješenje**: `pnpm -C apps/web build` → `pm2 restart thesara-web --update-env`.
+
+### 6.8 Next 15 tipovi i ESLint
+
+* **Problem**: `Type '{ params: { username: string } }' does not satisfy 'PageProps'` i `no-async-client-component`.
+* **Rješenje**: podjela na server/client komponentu i jasna tipizacija `params`.
+
+---
+
+## 7) Deploy/operativa – *cheat‑sheet*
+
+```bash
+# Pull + build + restart WEB
+cd /srv/thesara/app
+git pull --ff-only
+pnpm -C apps/web build
+pm2 restart thesara-web --update-env
+
+# Health API
+curl -sfI http://127.0.0.1:8788/health || echo FAIL
+
+# Test JWT signer
+curl -s http://127.0.0.1:3000/api/jwt -X POST \
+  -H 'content-type: application/json' \
+  -d '{"userId":"smoke","role":"admin"}' | jq .
+
+# Provjeri da Nginx šalje /api/jwt na :3000
+curl -i -X POST https://thesara.space/api/jwt \
+  -H 'content-type: application/json' \
+  -d '{"userId":"smoke"}' | head -n1
+
+# PM2 env sanity (tajne, dotenv)
+pm2 env $(pm2 list | awk '/thesara-api/{print $2}') | egrep 'DOTENV|GOOGLE_APPLICATION_CREDENTIALS|JWT_SECRET|NODE_ENV|PORT'
+```
+
+---
+
+## 8) Git – identitet i autentikacija
+
+* Konfigurirati identitet (ako commit s poslužitelja):
+
+```bash
+git config --global user.name "Ime Prezime"
+git config --global user.email "ime@example.com"
+```
+
+* **HTTPS** push: koristiti **Personal Access Token (PAT)** (password authentication ukinuta). Preporuka: pushati **s lokalnog računala**; poslužitelj neka samo `pull`‑a.
+
+---
+
+## 9) Model podataka – Firestore (trenutno)
+
+* **Kolekcija**: `users`
+
+  * **DocID**: `username` (npr. `amir.serbic`)
+  * Polja (primjeri):
+
+    * `uid: string`
+    * `email: string`
+    * `displayName?: string`
+    * `photoURL?: string`
+    * `username: string` (duplikat vrijednosti docID‑a, korisno za query)
+    * `roles?: { admin?: boolean, ... }`
+    * `createdAt: Timestamp`
+    * `bio?: string`
+
+> **Preporuka**: razmotriti korištenje `users/{uid}` kao *primarnog* docID‑a, a `username` držati kao polje uz jedinstveni indeks; `/u/[username]` može raditi preko query‑ja (get by username) – robusnije na promjene imena.
+
+---
+
+## 10) Brzi „Playbook“ (redoslijed oporavka)
+
+1. **API health**: `curl -sfI 127.0.0.1:8788/health` → `200`.
+2. **JWT**: uskladiti `JWT_SECRET` (web + api) → restart oba procesa.
+3. **Nginx iznimke**: `/api/jwt` točno mapiran na `:3000` → `nginx -t && reload`.
+4. **Firebase SA JSON**: validirati `jq`‑om; popraviti duple PEM header/footer; perms 600; `GOOGLE_APPLICATION_CREDENTIALS` na JSON; restart API‑ja.
+5. **WEB build**: `pnpm -C apps/web build` → `pm2 restart thesara-web --update-env`.
+6. **/u/[username]**: provjeriti postoji li dokument u `users` kolekciji; ako ne, login kreira preko `ensureUserDoc`.
+
+---
+
+## 11) Što smo naučili (ključne točke)
+
+* Potpisivanje JWT‑a **uvijek na serveru** (Next route), nikada u klijentu.
+* Nginx može „progutati“ Next rute – dodaj **iznimke**.
+* `JWT_SECRET` mora biti **jedinstvena i identična** u WEB i API.
+* Node 20/OSSL 3 greške oko PEM‑a su gotovo uvijek **krivo formatiran ključ**, ne OpenSSL bug.
+* Next 15 – budno paziti na **server/client komponentu** i tipove `params`.
+* PM2 + dotenv → `-r dotenv/config` i `DOTENV_CONFIG_PATH` su ključni da env bude stvarno učitan.
+* WEB 502? – gotovo uvijek nedostaje `.next` build.
+
+---
+
+## 12) To‑do / ideje (sljedeći koraci)
+
+* `/u/[username]` učiniti toleratnim na promjene: fallback query po `username` polju, a primarni docID `uid`.
+* Dodati jednostavne **health** rute i za WEB (npr. `/healthz`).
+* Postaviti **CI** (lint/test/build) i **CD** (deploy script) ili najmanje `post-receive` hook.
+* Firestore **security rules** revizija (što smije public, što treba auth).
+* Dodati **observability** (log rotacija, basic metrics).
+
+---
+
+**Autor**: Operativni tim THESARA
+**Datum**: 2025‑10‑17
