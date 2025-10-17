@@ -1,13 +1,3 @@
-// apps/web/app/u/[username]/page.tsx
-/**
- * USER PROFILE PAGE (Firestore)
- * -----------------------------
- * ✓ URL format: /u/{username}
- * ✓ Fetches Firestore document from "users/{username}"
- * ✓ Displays displayName, bio, and optional avatar
- * ✓ Shows fallback if user not found
- */
-
 'use client'
 
 import React, { useEffect, useState } from 'react'
@@ -23,10 +13,13 @@ export default function UserProfilePage({ params }: { params: { username: string
   useEffect(() => {
     const fetchUser = async () => {
       try {
+        if (!db) throw new Error('Firestore not initialized')
         const ref = doc(db, 'users', params.username)
         const snap = await getDoc(ref)
         if (snap.exists()) {
           setUser(snap.data())
+        } else {
+          console.warn('User not found:', params.username)
         }
       } catch (err) {
         console.error('Error fetching user:', err)
@@ -37,23 +30,17 @@ export default function UserProfilePage({ params }: { params: { username: string
     fetchUser()
   }, [params.username])
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen text-gray-500">
-        Loading profile...
-      </div>
-    )
-  }
-
-  if (!user) {
+  if (loading) return <div className="flex items-center justify-center min-h-screen">Loading profile...</div>
+  if (!user)
     return (
       <div className="flex flex-col items-center justify-center min-h-screen text-center">
         <h1 className="text-3xl font-bold mb-2">User not found</h1>
         <p className="text-gray-500 mb-4">No profile for @{params.username}</p>
-        <Link href="/" className="text-blue-600 underline">← Back to home</Link>
+        <Link href="/" className="text-blue-600 underline">
+          ← Back to home
+        </Link>
       </div>
     )
-  }
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-8 text-center">
