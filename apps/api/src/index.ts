@@ -95,8 +95,13 @@ export async function createServer() {
   );
 
   await app.register(cors, {
-    origin: ['https://thesara.space', 'https://www.thesara.space'],
-    methods: ['GET','POST','PUT','DELETE','OPTIONS'],
+    origin: [
+      'https://thesara.space',
+      'https://www.thesara.space',
+      'http://localhost:3000',
+      'http://127.0.0.1:3000',
+    ],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     credentials: true,
   });
 
