@@ -34,6 +34,7 @@ export async function ensureUserDoc(user: MinimalUser) {
         email: user.email ?? null,
         displayName: user.displayName ?? null,
         photoURL: user.photoURL ?? null,
+        username: user.email?.split('@')[0] ?? null,
         updatedAt: serverTimestamp(),
       },
       { merge: true }
