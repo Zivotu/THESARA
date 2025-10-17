@@ -1,35 +1,48 @@
 
 import { NextResponse } from "next/server";
-import { signAppJwt } from "@/lib/jwt-server"; // Assuming '@' is aliased to 'apps/web'
+import { signAppJwt, verifyAppJwt } from "@/lib/jwt-server";
 import { requireJwtSecret } from "@/lib/requireEnv";
 
 export async function POST(request: Request) {
   try {
     requireJwtSecret();
-    const payload = await request.json();
+    const body = await request.json();
 
-    // Basic validation to ensure payload contains a userId
-    if (!payload || typeof payload !== 'object' || !('userId' in payload)) {
+    if (!body || !body.token) {
       return NextResponse.json(
-        { error: "Invalid payload. It must be a JSON object with a 'userId' property." },
+        { ok: false, error: "Invalid payload. It must be a JSON object with a 'token' property." },
         { status: 400 }
       );
     }
+
+    const { token: oldToken } = body;
+    const decoded = verifyAppJwt(oldToken);
+
+    if (!decoded || !decoded.userId) {
+      return NextResponse.json(
+        { ok: false, error: "Invalid or expired token." },
+        { status: 401 }
+      );
+    }
+
+    const payload = {
+      userId: decoded.userId,
+    };
 
     const token = signAppJwt(payload, { expiresIn: 3600 }); // 1 hour
 
-    return NextResponse.json({ token });
+    return NextResponse.json({ ok: true, payload: { token } });
   } catch (error: any) {
     if (error instanceof SyntaxError) {
       return NextResponse.json(
-        { error: "Invalid JSON in request body." },
+        { ok: false, error: "Invalid JSON in request body." },
         { status: 400 }
       );
     }
-    
+
     console.error("JWT Signing Error:", error);
     return NextResponse.json(
-      { error: "Internal Server Error", message: error.message },
+      { ok: false, error: "Internal Server Error" },
       { status: 500 }
     );
   }
