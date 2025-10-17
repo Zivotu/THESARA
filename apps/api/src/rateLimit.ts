@@ -1,31 +1,26 @@
-import { db } from './db.js';
-import { getConfig } from './config.js';
+import type {Firestore} from '@google-cloud/firestore';
 
-const { RATE_LIMIT } = getConfig();
-const collection = RATE_LIMIT.collection || 'rate_limits';
-
-/**
- * Check and update the timestamp for the given key. Returns true if the key
- * is currently rate limited (i.e. called again within ttlMs), otherwise
- * false and updates the stored timestamp.
- */
-export async function isRateLimited(key: string, ttlMs: number): Promise<boolean> {
+export async function rateLimit(
+  db: Firestore,
+  collection: string,
+  key: string,
+  windowMs: number,
+  max: number,
+) {
+  const ref = db.collection(collection).doc(key);
   const now = Date.now();
-  const ref = db.collection(collection).doc(.key);
-  try {
-    const snap = await ref.get();
-    const last = snap.exists ? ((snap.data() as any).ts as number) : 0;
-    if (now - last < ttlMs) {
-      return true;
+
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    let state = snap.exists ? (snap.data() as any) : { count: 0, resetAt: now + windowMs };
+
+    if (now > state.resetAt) state = { count: 0, resetAt: now + windowMs };
+    state.count += 1;
+
+    tx.set(ref, state);
+
+    if (state.count > max) {
+      throw new Error('RATE_LIMITED');
     }
-    await ref.set({ ts: now, expiresAt: new Date(now + ttlMs) });
-    return false;
-  } catch (err: any) {
-    const code = err?.code || err?.status;
-    if (code === 'resource-exhausted' || code === 'RESOURCE_EXHAUSTED' || code === 8) {
-      console.warn('Rate limit store quota exceeded', err);
-      return false;
-    }
-    throw err;
-  }
+  });
 }

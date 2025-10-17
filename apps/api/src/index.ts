@@ -94,7 +94,7 @@ export async function createServer() {
     'env'
   );
 
-  await app.register(fastifyCors, {
+  await app.register(cors, {
     origin: ['https://thesara.space', 'https://www.thesara.space'],
     methods: ['GET','POST','PUT','DELETE','OPTIONS'],
     credentials: true,
@@ -156,7 +156,7 @@ export async function createServer() {
   });
 
   const staticAllowedOrigins = new Set([
-    ...resolvedAllowedOrigins,
+    ...ALLOWED_ORIGINS,
     'https://thesara.space',
     'https://www.thesara.space',
     'http://localhost:3000',
@@ -377,11 +377,11 @@ export async function createServer() {
     res.setHeader('Referrer-Policy', 'no-referrer');
 
     const origin = res.req?.headers?.origin as string | undefined;
-    if (origin && resolvedOriginsSet.has(origin)) {
+    if (origin && staticAllowedOrigins.has(origin)) {
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Access-Control-Allow-Credentials', 'true');
-    } else if (resolvedAllowedOrigins.length > 0) {
-      res.setHeader('Access-Control-Allow-Origin', resolvedAllowedOrigins[0]);
+    } else if (ALLOWED_ORIGINS.length > 0) {
+      res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGINS[0]);
     }
     res.setHeader('Vary', 'Origin');
   };

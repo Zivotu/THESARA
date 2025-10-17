@@ -1,4 +1,4 @@
-﻿import { exec as execCb } from 'node:child_process';
+﻿﻿import { exec as execCb } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -438,7 +438,7 @@ export class SafePublishPipeline {
     try {
       await this.runInContainer(
         '[ -f package.json ] && (npm i --package-lock-only --no-audit && npm audit --audit-level=high || true) || true',
-        dir
+        dir,
       );
     } catch (err: any) {
       if (err?.code === 'ENOENT') {
@@ -634,4 +634,3 @@ export class SafePublishPipeline {
     }
   }
 }
-
