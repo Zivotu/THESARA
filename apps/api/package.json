@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "tsx --node-options=--openssl-legacy-provider watch src/index.ts",
     "dev:worker": "tsx --node-options=--openssl-legacy-provider watch src/localdev/worker.run.ts",
-    "build": "tsup -c tsup.config.cjs",
+    "build": "tsup --config tsup.config.cjs && ren dist\\index.js server.cjs",
     "build:tsc": "tsc -p tsconfig.json",
     "start": "node --openssl-legacy-provider dist/server.cjs",
     "migrate": "tsx --node-options=--openssl-legacy-provider src/migrate.ts",
