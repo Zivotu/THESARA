@@ -1,12 +1,11 @@
-// ✅ SERVER COMPONENT (nije 'use client')
-// Ova komponenta samo prosljeđuje parametar klijentskoj komponenti
-
+// apps/web/app/u/[username]/page.tsx
 import UserProfileClient from './UserProfileClient'
 
 export default async function UserProfilePage({
   params,
 }: {
-  params: { username: string }
+  params: Promise<{ username: string }>
 }) {
-  return <UserProfileClient username={params.username} />
+  const { username } = await params
+  return <UserProfileClient username={username} />
 }
