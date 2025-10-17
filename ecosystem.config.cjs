@@ -1,37 +1,33 @@
-// ecosystem.config.cjs  (u rootu repozitorija)
+// ecosystem.config.cjs
 module.exports = {
   apps: [
     {
       name: 'thesara-api',
-      cwd: '/srv/thesara/app/apps/api',
-      // Kanonski start: node + dotenv preloader + OpenSSL legacy
+      cwd: 'apps/api',
       script: 'node',
-      args: 'dist/index.js',
-      node_args: '--openssl-legacy-provider -r dotenv/config',
+      args: 'dist/server.cjs',
+      node_args: '-r dotenv/config',
       env: {
         NODE_ENV: 'production',
         PORT: 8788,
-        DOTENV_CONFIG_PATH: '/srv/thesara/app/apps/api/.env.production',
+        DOTENV_CONFIG_PATH: 'apps/api/.env.production',
         GOOGLE_APPLICATION_CREDENTIALS: '/etc/thesara/creds/firebase-sa.json',
       },
       max_memory_restart: '512M',
       restart_delay: 5000,
-      time: true,
     },
     {
       name: 'thesara-web',
-      cwd: '/srv/thesara/app/apps/web',
-      // Držimo se skripti iz package.json-a
+      cwd: 'apps/web',
       script: 'pnpm',
       args: 'start',
-      env_file: '/srv/thesara/app/apps/web/.env.production',
+      env_file: 'apps/web/.env.production',
       env: {
         NODE_ENV: 'production',
         PORT: 3000,
       },
       max_memory_restart: '512M',
       restart_delay: 5000,
-      time: true,
     },
   ],
 };
