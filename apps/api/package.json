@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "cross-env NODE_OPTIONS=--openssl-legacy-provider tsx watch src/index.ts",
     "dev:worker": "cross-env NODE_OPTIONS=--openssl-legacy-provider tsx watch src/localdev/worker.run.ts",
-    "build": "tsup --config tsup.config.cjs && ren dist\\index.js server.cjs",
+    "build": "tsup --config tsup.config.cjs && node -e \"require('fs').renameSync('dist/index.js', 'dist/server.cjs')\"",
     "build:tsc": "tsc -p tsconfig.json",
     "start": "node --openssl-legacy-provider dist/index.js",
     "migrate": "cross-env NODE_OPTIONS=--openssl-legacy-provider tsx src/migrate.ts",
