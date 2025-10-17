@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
-import { doc, getDoc } from 'firebase/firestore'
+import { collection, query, where, getDocs } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -13,9 +13,12 @@ export default function UserProfileClient({ username }: { username: string }) {
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const ref = doc(db, 'users', username)
-        const snap = await getDoc(ref)
-        if (snap.exists()) setUser(snap.data())
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('username', '==', username));
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+          setUser(querySnapshot.docs[0].data());
+        }
       } catch (err) {
         console.error('Error fetching user:', err)
       } finally {
