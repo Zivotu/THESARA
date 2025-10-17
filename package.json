@@ -7,7 +7,7 @@
     "dev:redis:down": "docker compose -f docker-compose.dev.yml down",
     "dev": "pnpm run dev:redis && node tools/dev.mjs",
     "dev:reset": "node -e \"require('fs').rmSync('.devdata',{recursive:true,force:true});console.log('✔ .devdata cleaned')\"",
-    "build:api": "pnpm --filter @loopyway/api tsup",
+    "build:api": "cd apps/api && tsup src/index.ts --format cjs --target node20 --platform node --out-dir dist --clean",
     "build:web": "pnpm --filter @loopyway/web build",
     "build": "pnpm run build:api && pnpm run build:web"
   }

@@ -7,8 +7,8 @@
   "scripts": {
     "dev": "tsx --node-options=--openssl-legacy-provider watch src/index.ts",
     "dev:worker": "tsx --node-options=--openssl-legacy-provider watch src/localdev/worker.run.ts",
-    "build": "tsup --config tsup.config.ts",
-    "build:bundle": "tsup --config tsup.config.ts",
+    "build": "tsup --config tsup.config.js",
+    "build:bundle": "tsup --config tsup.config.js",
     "start": "node --openssl-legacy-provider dist/server.cjs",
     "migrate": "tsx --node-options=--openssl-legacy-provider src/migrate.ts",
     "check:bundle": "node -e \"import('file://'+process.cwd()+'/dist/server.mjs').then(()=>console.log('OK')).catch(e=>{console.error(e);process.exit(1)})\"",

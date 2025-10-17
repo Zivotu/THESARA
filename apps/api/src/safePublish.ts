@@ -436,23 +436,10 @@ export class SafePublishPipeline {
       return;
     }
     try {
-      const hasPkgJson = await fs.promises
-        .access(path.join(dir, 'package.json'))
-        .then(() => true)
-        .catch(() => false);
-
-      if (hasPkgJson) {
-        await this.runInContainer(
-          'npm i --package-lock-only --no-audit || true',
-          dir
-        );
-        await this.runInContainer(
-          'npm audit --audit-level=high || true',
-          dir
-        );
-      } else {
-        this.log.info?.('bundle: no package.json, skipping npm install/audit', { dir });
-      }
+      await this.runInContainer(
+        '[ -f package.json ] && (npm i --package-lock-only --no-audit && npm audit --audit-level=high || true) || true',
+        dir
+      );
     } catch (err: any) {
       if (err?.code === 'ENOENT') {
         this.log.warn?.('Docker runtime missing, skipping npm audit');
