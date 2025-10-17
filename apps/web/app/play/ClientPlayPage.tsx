@@ -6,6 +6,7 @@ import { apiFetch, ApiError } from '@/lib/api';
 import { API_URL } from '@/lib/config';
 import { joinUrl } from '@/lib/url';
 import { useSafeSearchParams } from '@/hooks/useSafeSearchParams';
+import { auth } from '@/lib/firebase';
 
 
 type BuildStatusResponse = {
@@ -63,7 +64,11 @@ export default function ClientPlayPage({ appId }: { appId: string }) {
           const response = await fetch('/api/jwt', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: effectiveToken }),
+            body: JSON.stringify({
+              token: effectiveToken,
+              userId: auth?.currentUser?.uid || 'guest',
+              role: (auth?.currentUser as any)?.role || 'user',
+            }),
           });
           if (!response.ok) {
             const errorBody = await response.json();
