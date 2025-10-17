@@ -1,49 +1,33 @@
+// PATCH PROMPT: Fix JWT signing route in Next.js (apps/web/app/api/jwt/route.ts)
+// Context: Currently returns "Invalid payload" because it expects { token }.
+// Goal: Make this route generate a signed JWT token from provided JSON (e.g. { userId, role }).
 
-import { NextResponse } from "next/server";
-import { signAppJwt, verifyAppJwt } from "@/lib/jwt-server";
-import { requireJwtSecret } from "@/lib/requireEnv";
+import jwt from 'jsonwebtoken'
 
-export async function POST(request: Request) {
+export async function POST(req: Request) {
   try {
-    requireJwtSecret();
-    const body = await request.json();
+    const body = await req.json()
 
-    if (!body || !body.token) {
-      return NextResponse.json(
-        { ok: false, error: "Invalid payload. It must be a JSON object with a 'token' property." },
-        { status: 400 }
-      );
+    // Allow any object (userId optional)
+    const payload =
+      typeof body === 'object' && body !== null ? body : { anon: true }
+
+    // Validate secret
+    const secret = process.env.JWT_SECRET
+    if (!secret) {
+      return Response.json({ ok: false, error: 'Missing JWT_SECRET' }, { status: 500 })
     }
 
-    const { token: oldToken } = body;
-    const decoded = verifyAppJwt(oldToken);
+    // Sign a new JWT (HS256)
+    const token = jwt.sign(payload, secret, {
+      algorithm: 'HS256',
+      expiresIn: '15m',
+      issuer: 'thesara-web',
+    })
 
-    if (!decoded || !decoded.userId) {
-      return NextResponse.json(
-        { ok: false, error: "Invalid or expired token." },
-        { status: 401 }
-      );
-    }
-
-    const payload = {
-      userId: decoded.userId,
-    };
-
-    const token = signAppJwt(payload, { expiresIn: 3600 }); // 1 hour
-
-    return NextResponse.json({ ok: true, payload: { token } });
-  } catch (error: any) {
-    if (error instanceof SyntaxError) {
-      return NextResponse.json(
-        { ok: false, error: "Invalid JSON in request body." },
-        { status: 400 }
-      );
-    }
-
-    console.error("JWT Signing Error:", error);
-    return NextResponse.json(
-      { ok: false, error: "Internal Server Error" },
-      { status: 500 }
-    );
+    return Response.json({ ok: true, token })
+  } catch (err: any) {
+    console.error('JWT signing failed:', err)
+    return Response.json({ ok: false, error: err.message || 'Failed to sign token' }, { status: 400 })
   }
 }
